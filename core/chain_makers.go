@@ -32,7 +32,7 @@ import (
 	"github.com/zenanet-network/go-zenanet/ethdb"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/triedb"
-	"github.com/zenanet-network/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
 

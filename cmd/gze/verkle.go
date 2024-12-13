@@ -24,12 +24,12 @@ import (
 	"os"
 	"slices"
 
+	"github.com/ethereum/go-verkle"
+	"github.com/urfave/cli/v2"
 	"github.com/zenanet-network/go-zenanet/cmd/utils"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/rawdb"
 	"github.com/zenanet-network/go-zenanet/log"
-	"github.com/zenanet-network/go-verkle"
-	"github.com/urfave/cli/v2"
 )
 
 var (

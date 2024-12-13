@@ -28,7 +28,7 @@ import (
 	"github.com/zenanet-network/go-zenanet/trie/trienode"
 	"github.com/zenanet-network/go-zenanet/trie/utils"
 	"github.com/zenanet-network/go-zenanet/triedb/database"
-	"github.com/zenanet-network/go-verkle"
+	"github.com/ethereum/go-verkle"
 	"github.com/holiman/uint256"
 )
 

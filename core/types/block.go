@@ -31,7 +31,7 @@ import (
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
 	"github.com/zenanet-network/go-zenanet/rlp"
-	"github.com/zenanet-network/go-verkle"
+	"github.com/ethereum/go-verkle"
 )
 
 // A BlockNonce is a 64-bit hash which proves (combined with the
