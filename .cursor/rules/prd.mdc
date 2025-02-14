@@ -1,0 +1,178 @@
+---
+description: Product Requirements Document
+globs: 
+---
+# 1. Project Overview
+
+Go-ZenaNet는 평화(고대 그리스 철학) 테마를 중심으로 설계된 PoS(Blockchain Proof-of-Stake) 기반 블록체인 네트워크입니다.
+이 프로젝트는 Go 언어를 기반으로, go-ethereum을 포크하여 수정된 버전으로 개발됩니다.
+추가적으로, ChatGPT API를 활용하여 스마트 계약 및 네트워크 내 다양한 애플리케이션의 생성을 자동화하는 기능을 제공합니다.
+
+목표:
+
+1. 사용자 친화적이고 효율적인 PoS 블록체인 구축.
+2. 테스트넷 환경에서의 안정성 검증.
+3. 스마트 계약 개발의 자동화를 통해 개발자의 접근성을 높임.
+
+---
+
+# 2. Core Functionalities
+
+### 1. 블록체인 코어
+
+- go-ethereum 포크 및 커스터마이징:
+- 기존 Geth(go-ethereum) 소스 코드 포크.
+- PoW(Proof-of-Work) 알고리즘 → PoS(Proof-of-Stake)로 전환.
+- 커스텀 합의 알고리즘 구현 (테마: 고대 그리스 평화와 조화).
+- 합의 알고리즘 명칭: “Eirene Consensus”.
+- 네트워크 명칭 및 구성:
+- 메인넷: Go-ZenaNet
+- 테스트넷: Eirene Testnet
+- 네트워크 ID, 체인 ID 설정 (포크 시 수정 필요).
+
+### 2. 스마트 계약 자동 생성 시스템
+
+- ChatGPT API 연동:
+- 사용자가 요구사항을 입력하면 자동으로 스마트 계약을 생성.
+- ERC-20 토큰 계약 템플릿 생성.
+- NFT 표준(ERC-721) 계약 생성.
+- 코드 생성 후 기본적인 보안 검토 및 배포 가이드 제공.
+- 예제 사용자 경험:
+- 사용자는 “ERC-20 토큰” 옵션 선택 후 토큰 이름, 심볼, 총 발행량 입력.
+- AI가 자동으로 코드를 생성 및 테스트넷에 배포.
+
+### 3. 지갑 및 노드 관리
+
+- CLI 툴: 사용자 친화적 CLI를 통해:
+- 지갑 생성 및 관리.
+- 스테이킹 기능 활성화.
+- 트랜잭션 전송 및 조회.
+- 노드 운영: 경량 및 풀 노드 설정 지원.
+
+---
+
+# 3. Documentation
+
+## 사용자 가이드 (Documentation Outline):
+
+#### 1. 네트워크 설정 가이드:
+
+- go-ethereum 포크 코드 컴파일 및 설치 방법.
+- 네트워크 ID 및 구성 요소 세부 설정.
+
+#### 2. PoS 합의 알고리즘 설명:
+
+- “Eirene Consensus” 개요.
+- 스테이킹 및 블록 보상 메커니즘.
+
+#### 3. ChatGPT 기반 스마트 계약 생성 사용법:
+
+- API 키 설정.
+- 스마트 계약 자동 생성 워크플로우.
+
+#### 4. 테스트넷 연결 가이드:
+
+- 테스트 지갑 생성 및 토큰 수령.
+- 샘플 스마트 계약 배포 연습.
+
+---
+
+# 4. File Structure
+
+```
+/go-zenanet
+│
+├── /cmd
+│   └── gze/           # Geth 실행 파일 및 CLI 명령어
+│
+├── /consensus
+│   └── eirene/         # PoS 합의 알고리즘 코드
+│       ├── api/                # API 인터페이스 및 구현
+│       ├── block/              # 블록 생성 및 검증 관련 기능
+│        ├── bft/                # BFT(Byzantine Fault Tolerance) 합의 알고리즘 구현
+│        │   ├── types/          # 타입 정의 모음
+│        │   │   ├── consensus.go     # 합의 관련 기본 타입(ConsensusState, ConsensusRound 등) 정의
+│        │   │   ├── message.go       # 합의 메시지 타입(PrePrepare, Prepare, Commit 등) 정의
+│        │   │   ├── quorum.go        # 정족수 인증서(QuorumCertificate) 관련 타입 정의
+│        │   │   └── view_change.go   # 뷰 체인지 관련 타입 및 상태 정의
+│        │   │
+│        │   ├── bft_state.go         # BFT 상태 관리 인터페이스 정의
+│        │   ├── bft_test.go          # BFT 전체 기능 통합 테스트
+│        │   ├── state.go             # 합의 상태 관리 구현 (라운드, 페이즈, 타이머 등)
+│        │   ├── view_change.go       # 뷰 체인지 메커니즘 구현 (리더 변경, 타임아웃 처리 등)
+│        │   ├── view_change_test.go  # 뷰 체인지 기능 테스트
+│        │   ├── vote_aggregator.go   # 투표 수집 및 정족수 확인 구현
+│        │   └── vote_aggregator_test.go # 투표 집계 기능 테스트
+│        │
+│        ├── config/             # 합의 알고리즘 설정 관리
+│        ├── consensus.go        # 메인 합의 알고리즘 진입점
+│        ├── core/              # 핵심 로직 및 유틸리티
+│        ├── crypto/            # 암호화 및 서명 관련 기능
+│        ├── economic/          # 경제적 인센티브 관련 기능
+│        ├── epoch/             # 에포크 관리 (검증자 순환, 블록 생성 주기 등)
+│        ├── finalization.go    # 블록 최종성(finality) 처리
+│        ├── interfaces/        # 주요 인터페이스 정의
+│        ├── reputation/        # 검증자 평판 시스템
+│        ├── tests/            # 테스트 유틸리티 및 모의 객체
+│        ├── validator/        # 검증자 관리 (등록, 제거, 상태 관리 등)
+│        └── vrf/              # VRF(Verifiable Random Function) 구현
+│
+├── /contracts
+│   └── templates/      # 스마트 계약 템플릿 (ERC-20, ERC-721 등)
+│
+├── /docs
+│   └── guides/         # 사용자 및 개발자 가이드 문서
+│
+├── /tests
+│   └── network/        # 테스트넷 시뮬레이션 및 PoS 테스트
+│
+└── /api
+    └── chatgpt/        # ChatGPT API 연동 코드
+
+주요 컴포넌트 설명:
+
+1. BFT 패키지 (consensus/eirene/bft/):
+  - 3단계 합의(PrePrepare-Prepare-Commit) 구현
+  - 뷰 체인지를 통한 리더 교체 메커니즘
+  - 투표 집계 및 정족수 확인
+  - 상태 관리 및 타이머 처리
+
+2. 타입 패키지 (consensus/eirene/bft/types/):
+  - 합의에 필요한 모든 데이터 구조 정의
+  - 메시지 타입 및 상태 정의
+  - 정족수 인증서 관련 타입 정의
+
+3. 지원 패키지들:
+  - validator/: 검증자 생명주기 관리
+  - epoch/: 검증자 순환 및 블록 생성 주기 관리
+  - crypto/: 암호화 및 서명 검증
+  - economic/: 검증자 보상 및 페널티 처리
+  - reputation/: 검증자 신뢰도 평가 시스템
+
+```
+
+---
+
+# 5. Additional Requirements
+
+## 기술 스택
+
+- 언어: Go
+- 블록체인 포크: go-ethereum
+- AI 연동: OpenAI ChatGPT API
+- 컨테이너화: Docker로 노드 배포 및 테스트 지원.
+
+## 디자인 및 명칭 가이드라인
+
+- 테마: 평화, 고대 그리스 문화.
+- 키워드 예시:
+  - 스마트 계약 생성기: Sophia (지혜).
+  - 스테이킹 노드 이름: Aegis Node.
+  - 테스트넷 토큰 이름: Eirene Token (ERT).
+
+---
+
+# 파일 사용시 추가
+
+**내용을 확인하면 "PRD.md 파일을 확인중입니다."를 꼭 내용에 작성해주세요.**
+

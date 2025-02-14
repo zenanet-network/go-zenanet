@@ -1,18 +1,18 @@
-// Copyright 2023 The go-zenanet Authors
-// This file is part of the go-zenanet library.
+// Copyright 2023 The go-ethereum Authors
+// This file is part of the go-ethereum library.
 //
-// The go-zenanet library is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// The go-zenanet library is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with the go-zenanet library. If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package ethapi
 
@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,12 +28,11 @@ import (
 	"path/filepath"
 	"reflect"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/zenanet-network/go-zenanet/accounts/abi"
-	"github.com/zenanet-network/go-zenanet/internal/ethapi/override"
+	"github.com/holiman/uint256"
+	"github.com/stretchr/testify/require"
 
 	"github.com/zenanet-network/go-zenanet"
 	"github.com/zenanet-network/go-zenanet/accounts"
@@ -51,17 +49,16 @@ import (
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/core/vm"
 	"github.com/zenanet-network/go-zenanet/crypto"
-	"github.com/zenanet-network/go-zenanet/crypto/kzg4844"
 	"github.com/zenanet-network/go-zenanet/ethdb"
 	"github.com/zenanet-network/go-zenanet/event"
 	"github.com/zenanet-network/go-zenanet/internal/blocktest"
+	"github.com/zenanet-network/go-zenanet/internal/ethapi/override"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/rpc"
-	"github.com/holiman/uint256"
-	"github.com/stretchr/testify/require"
 )
 
 func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainConfig) {
+	t.Parallel()
 	var (
 		signer = types.LatestSigner(config)
 		key, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
@@ -98,8 +95,6 @@ func testTransactionMarshal(t *testing.T, tests []txData, config *params.ChainCo
 }
 
 func TestTransaction_RoundTripRpcJSON(t *testing.T) {
-	t.Parallel()
-
 	var (
 		config = params.AllEthashProtocolChanges
 		tests  = allTransactionTypes(common.Address{0xde, 0xad}, config)
@@ -108,11 +103,11 @@ func TestTransaction_RoundTripRpcJSON(t *testing.T) {
 }
 
 func TestTransactionBlobTx(t *testing.T) {
-	t.Parallel()
-
 	config := *params.TestChainConfig
-	config.ShanghaiTime = new(uint64)
-	config.CancunTime = new(uint64)
+	//TODO: Mainnet TimeStmp Fork allowed
+	zero := uint64(0)
+	config.ShanghaiTime = &zero
+	config.CancunTime = &zero
 	tests := allBlobTxs(common.Address{0xde, 0xad}, &config)
 
 	testTransactionMarshal(t, tests, &config)
@@ -152,8 +147,8 @@ func allTransactionTypes(addr common.Address, config *params.ChainConfig) []txDa
 				"type": "0x0",
 				"chainId": "0x539",
 				"v": "0xa96",
-				"r": "0xbc85e96592b95f7160825d837abb407f009df9ebe8f1b9158a4b8dd093377f75",
-				"s": "0x1b55ea3af5574c536967b039ba6999ef6c89cf22fc04bcb296e0e8b0b9b576f5"
+				"r": "0x9dc28b267b6ad4e4af6fe9289668f9305c2eb7a3241567860699e478af06835a",
+				"s": "0xa0b51a071aa9bed2cd70aedea859779dff039e3630ea38497d95202e9b1fec7"
 			}`,
 		}, {
 			Tx: &types.LegacyTx{
@@ -417,7 +412,7 @@ func allBlobTxs(addr common.Address, config *params.ChainConfig) []txData {
 func newTestAccountManager(t *testing.T) (*accounts.Manager, accounts.Account) {
 	var (
 		dir        = t.TempDir()
-		am         = accounts.NewManager(nil)
+		am         = accounts.NewManager(&accounts.Config{InsecureUnlockAllowed: true})
 		b          = keystore.NewKeyStore(dir, 2, 1)
 		testKey, _ = crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
 	)
@@ -451,7 +446,7 @@ func newTestBackend(t *testing.T, n int, gspec *core.Genesis, engine consensus.E
 		}
 	)
 	accman, acc := newTestAccountManager(t)
-	gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Zen)}
+	// gspec.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	// Generate blocks for testing
 	db, blocks, _ := core.GenerateChainWithGenesis(gspec, engine, n, generator)
 	txlookupLimit := uint64(0)
@@ -508,8 +503,7 @@ func (b testBackend) HeaderByNumberOrHash(ctx context.Context, blockNrOrHash rpc
 	}
 	panic("unknown type rpc.BlockNumberOrHash")
 }
-
-func (b testBackend) CurrentHeader() *types.Header { return b.chain.CurrentHeader() }
+func (b testBackend) CurrentHeader() *types.Header { return b.chain.CurrentBlock() }
 func (b testBackend) CurrentBlock() *types.Header  { return b.chain.CurrentBlock() }
 func (b testBackend) BlockByNumber(ctx context.Context, number rpc.BlockNumber) (*types.Block, error) {
 	if number == rpc.LatestBlockNumber {
@@ -565,20 +559,31 @@ func (b testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.R
 	receipts := rawdb.ReadReceipts(b.db, hash, header.Number.Uint64(), header.Time, b.chain.Config())
 	return receipts, nil
 }
+func (b testBackend) GetTd(ctx context.Context, hash common.Hash) *big.Int {
+	if b.pending != nil && hash == b.pending.Hash() {
+		return nil
+	}
+	return big.NewInt(1)
+}
 func (b testBackend) GetEVM(ctx context.Context, state *state.StateDB, header *types.Header, vmConfig *vm.Config, blockContext *vm.BlockContext) *vm.EVM {
 	if vmConfig == nil {
 		vmConfig = b.chain.GetVMConfig()
 	}
-	context := core.NewEVMBlockContext(header, b.chain, nil)
-	if blockContext != nil {
-		context = *blockContext
+	// 빈 거래 컨텍스트를 사용하거나, 필요 시 적절히 초기화된 TxContext를 전달
+	txContext := vm.TxContext{}
+	if blockContext == nil {
+		bc := core.NewEVMBlockContext(header, b.chain, nil)
+		blockContext = &bc
 	}
-	return vm.NewEVM(context, state, b.chain.Config(), *vmConfig)
+	return vm.NewEVM(*blockContext, txContext, state, b.chain.Config(), *vmConfig)
 }
 func (b testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	panic("implement me")
 }
 func (b testBackend) SubscribeChainHeadEvent(ch chan<- core.ChainHeadEvent) event.Subscription {
+	panic("implement me")
+}
+func (b testBackend) SubscribeChainSideEvent(ch chan<- core.ChainSideEvent) event.Subscription {
 	panic("implement me")
 }
 func (b testBackend) SendTx(ctx context.Context, signedTx *types.Transaction) error {
@@ -614,39 +619,103 @@ func (b testBackend) SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) 
 func (b testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription {
 	panic("implement me")
 }
+func (b testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	panic("implement me")
+}
 func (b testBackend) BloomStatus() (uint64, uint64) { panic("implement me") }
 func (b testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {
 	panic("implement me")
+}
+
+// GetEireneBlockTransaction returns eirene block tx
+func (b testBackend) GetEireneBlockTransaction(ctx context.Context, hash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetBorBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error) {
+	tx, blockHash, blockNumber, index := rawdb.ReadEireneTransactionWithBlockHash(b.ChainDb(), txHash, blockHash)
+	return tx, blockHash, blockNumber, index, nil
+}
+
+func (b testBackend) GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetVoteOnHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64, hash string, milestoneId string) (bool, error) {
+	panic("implement me")
+}
+
+func (b testBackend) GetWhitelistedCheckpoint() (bool, uint64, common.Hash) {
+	panic("implement me")
+}
+
+func (b testBackend) GetWhitelistedMilestone() (bool, uint64, common.Hash) {
+	panic("implement me")
+}
+
+func (b testBackend) PurgeWhitelistedMilestone() {
+	panic("implement me")
+}
+
+func (b testBackend) PurgeWhitelistedCheckpoint() {
+	panic("implement me")
+}
+
+func (b testBackend) RPCRpcReturnDataLimit() uint64 {
+	return 0
+}
+
+func (b testBackend) SubscribeChain2HeadEvent(ch chan<- core.Chain2HeadEvent) event.Subscription {
+	panic("implement me")
+}
+
+func (b testBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	panic("implement me")
+}
+
+func (b testBackend) PeerStats() interface{} {
+	panic("implement me")
+}
+
+func (b testBackend) GetEireneBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error) {
+	receipt, err := b.GetEireneBlockReceipt(ctx, hash)
+	if err != nil || receipt == nil {
+		return nil, err
+	}
+
+	return receipt.Logs, nil
+}
+
+func (b testBackend) GetEireneBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error) {
+	number := rawdb.ReadHeaderNumber(b.db, hash)
+	if number == nil {
+		return nil, nil
+	}
+
+	receipt := rawdb.ReadRawEireneReceipt(b.db, hash, *number)
+	if receipt == nil {
+		return nil, nil
+	}
+
+	return receipt, nil
 }
 
 func TestEstimateGas(t *testing.T) {
 	t.Parallel()
 	// Initialize test accounts
 	var (
-		accounts = newAccounts(4)
+		accounts = newAccounts(2)
 		genesis  = &core.Genesis{
 			Config: params.MergedTestChainConfig,
 			Alloc: types.GenesisAlloc{
 				accounts[0].addr: {Balance: big.NewInt(params.Zen)},
 				accounts[1].addr: {Balance: big.NewInt(params.Zen)},
-				accounts[2].addr: {Balance: big.NewInt(params.Zen), Code: append(types.DelegationPrefix, accounts[3].addr.Bytes()...)},
 			},
 		}
 		genBlocks      = 10
 		signer         = types.HomesteadSigner{}
 		randomAccounts = newAccounts(2)
 	)
-	packRevert := func(revertMessage string) []byte {
-		var revertSelector = crypto.Keccak256([]byte("Error(string)"))[:4]
-		stringType, _ := abi.NewType("string", "", nil)
-		args := abi.Arguments{
-			{Type: stringType},
-		}
-		encodedMessage, _ := args.Pack(revertMessage)
-
-		return append(revertSelector, encodedMessage...)
-	}
-
 	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		// Transfer from account[0] to account[1]
 		//    value: 1000 wei
@@ -655,16 +724,14 @@ func TestEstimateGas(t *testing.T) {
 		b.AddTx(tx)
 		b.SetPoS()
 	}))
-
 	var testSuite = []struct {
-		blockNumber    rpc.BlockNumber
-		call           TransactionArgs
-		overrides      override.StateOverride
-		blockOverrides override.BlockOverrides
-		expectErr      error
-		want           uint64
+		blockNumber rpc.BlockNumber
+		call        TransactionArgs
+		overrides   override.StateOverride
+		expectErr   error
+		want        uint64
 	}{
-		//simple transfer on latest block
+		// simple transfer on latest block
 		{
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
@@ -767,85 +834,16 @@ func TestEstimateGas(t *testing.T) {
 			},
 			want: 21000,
 		},
-		// // SPDX-License-Identifier: GPL-3.0
-		//pragma solidity >=0.8.2 <0.9.0;
-		//
-		//contract BlockOverridesTest {
-		//    function call() public view returns (uint256) {
-		//        return block.number;
-		//    }
-		//
-		//    function estimate() public view {
-		//        revert(string.concat("block ", uint2str(block.number)));
-		//    }
-		//
-		//    function uint2str(uint256 _i) internal pure returns (string memory str) {
-		//        if (_i == 0) {
-		//            return "0";
-		//        }
-		//        uint256 j = _i;
-		//        uint256 length;
-		//        while (j != 0) {
-		//            length++;
-		//            j /= 10;
-		//        }
-		//        bytes memory bstr = new bytes(length);
-		//        uint256 k = length;
-		//        j = _i;
-		//        while (j != 0) {
-		//            bstr[--k] = bytes1(uint8(48 + (j % 10)));
-		//            j /= 10;
-		//        }
-		//        str = string(bstr);
-		//    }
-		//}
-		{
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From: &accounts[0].addr,
-				To:   &accounts[1].addr,
-				Data: hex2Bytes("0x3592d016"), //estimate
-			},
-			overrides: override.StateOverride{
-				accounts[1].addr: override.OverrideAccount{
-					Code: hex2Bytes("608060405234801561000f575f5ffd5b5060043610610034575f3560e01c806328b5e32b146100385780633592d0161461004b575b5f5ffd5b4360405190815260200160405180910390f35b610053610055565b005b61005e4361009d565b60405160200161006e91906101a5565b60408051601f198184030181529082905262461bcd60e51b8252610094916004016101cd565b60405180910390fd5b6060815f036100c35750506040805180820190915260018152600360fc1b602082015290565b815f5b81156100ec57806100d681610216565b91506100e59050600a83610242565b91506100c6565b5f8167ffffffffffffffff81111561010657610106610255565b6040519080825280601f01601f191660200182016040528015610130576020820181803683370190505b508593509050815b831561019c57610149600a85610269565b61015490603061027c565b60f81b8261016183610295565b92508281518110610174576101746102aa565b60200101906001600160f81b03191690815f1a905350610195600a85610242565b9350610138565b50949350505050565b650313637b1b5960d51b81525f82518060208501600685015e5f920160060191825250919050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b634e487b7160e01b5f52601160045260245ffd5b5f6001820161022757610227610202565b5060010190565b634e487b7160e01b5f52601260045260245ffd5b5f826102505761025061022e565b500490565b634e487b7160e01b5f52604160045260245ffd5b5f826102775761027761022e565b500690565b8082018082111561028f5761028f610202565b92915050565b5f816102a3576102a3610202565b505f190190565b634e487b7160e01b5f52603260045260245ffdfea2646970667358221220a253cad1e2e3523b8c053c1d0cd1e39d7f3bafcedd73440a244872701f05dab264736f6c634300081c0033"),
-				},
-			},
-			blockOverrides: override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
-			expectErr:      newRevertError(packRevert("block 11")),
-		},
-		// Should be able to send to an EIP-7702 delegated account.
-		{
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From:  &accounts[0].addr,
-				To:    &accounts[2].addr,
-				Value: (*hexutil.Big)(big.NewInt(1)),
-			},
-			want: 21000,
-		},
-		// Should be able to send as EIP-7702 delegated account.
-		{
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From:  &accounts[2].addr,
-				To:    &accounts[1].addr,
-				Value: (*hexutil.Big)(big.NewInt(1)),
-			},
-			want: 21000,
-		},
 	}
 	for i, tc := range testSuite {
-		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
+		result, err := api.EstimateGas(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, nil)
 		if tc.expectErr != nil {
 			if err == nil {
 				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
-				if !reflect.DeepEqual(err, tc.expectErr) {
-					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
-				}
+				t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 			}
 			continue
 		}
@@ -894,17 +892,15 @@ func TestCall(t *testing.T) {
 	}))
 	randomAccounts := newAccounts(3)
 	var testSuite = []struct {
-		name           string
 		blockNumber    rpc.BlockNumber
 		overrides      override.StateOverride
 		call           TransactionArgs
-		blockOverrides override.BlockOverrides
+		blockOverrides BlockOverrides
 		expectErr      error
 		want           string
 	}{
 		// transfer on genesis
 		{
-			name:        "transfer-on-genesis",
 			blockNumber: rpc.BlockNumber(0),
 			call: TransactionArgs{
 				From:  &accounts[0].addr,
@@ -916,7 +912,6 @@ func TestCall(t *testing.T) {
 		},
 		// transfer on the head
 		{
-			name:        "transfer-on-the-head",
 			blockNumber: rpc.BlockNumber(genBlocks),
 			call: TransactionArgs{
 				From:  &accounts[0].addr,
@@ -928,7 +923,6 @@ func TestCall(t *testing.T) {
 		},
 		// transfer on a non-existent block, error expects
 		{
-			name:        "transfer-non-existent-block",
 			blockNumber: rpc.BlockNumber(genBlocks + 1),
 			call: TransactionArgs{
 				From:  &accounts[0].addr,
@@ -939,7 +933,6 @@ func TestCall(t *testing.T) {
 		},
 		// transfer on the latest block
 		{
-			name:        "transfer-latest-block",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
 				From:  &accounts[0].addr,
@@ -951,7 +944,6 @@ func TestCall(t *testing.T) {
 		},
 		// Call which can only succeed if state is state overridden
 		{
-			name:        "state-override-success",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
 				From:  &randomAccounts[0].addr,
@@ -965,7 +957,6 @@ func TestCall(t *testing.T) {
 		},
 		// Invalid call without state overriding
 		{
-			name:        "insufficient-funds-simple",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
 				From:  &randomAccounts[0].addr,
@@ -991,7 +982,6 @@ func TestCall(t *testing.T) {
 		//      }
 		//  }
 		{
-			name:        "simple-contract-call",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
 				From: &randomAccounts[0].addr,
@@ -1001,89 +991,27 @@ func TestCall(t *testing.T) {
 			overrides: override.StateOverride{
 				randomAccounts[2].addr: override.OverrideAccount{
 					Code:      hex2Bytes("6080604052348015600f57600080fd5b506004361060285760003560e01c80638381f58a14602d575b600080fd5b60336049565b6040518082815260200191505060405180910390f35b6000548156fea2646970667358221220eab35ffa6ab2adfe380772a48b8ba78e82a1b820a18fcb6f59aa4efb20a5f60064736f6c63430007040033"),
-					StateDiff: map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
+					StateDiff: &map[common.Hash]common.Hash{{}: common.BigToHash(big.NewInt(123))},
 				},
 			},
 			want: "0x000000000000000000000000000000000000000000000000000000000000007b",
 		},
-		// // SPDX-License-Identifier: GPL-3.0
-		//pragma solidity >=0.8.2 <0.9.0;
-		//
-		//contract BlockOverridesTest {
-		//    function call() public view returns (uint256) {
-		//        return block.number;
-		//    }
-		//
-		//    function estimate() public view {
-		//        revert(string.concat("block ", uint2str(block.number)));
-		//    }
-		//
-		//    function uint2str(uint256 _i) internal pure returns (string memory str) {
-		//        if (_i == 0) {
-		//            return "0";
-		//        }
-		//        uint256 j = _i;
-		//        uint256 length;
-		//        while (j != 0) {
-		//            length++;
-		//            j /= 10;
-		//        }
-		//        bytes memory bstr = new bytes(length);
-		//        uint256 k = length;
-		//        j = _i;
-		//        while (j != 0) {
-		//            bstr[--k] = bytes1(uint8(48 + (j % 10)));
-		//            j /= 10;
-		//        }
-		//        str = string(bstr);
-		//    }
-		//}
+		// Block overrides should work
 		{
-			name:        "block-override-with-state-override",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
 				From: &accounts[1].addr,
-				To:   &accounts[2].addr,
-				Data: hex2Bytes("0x28b5e32b"), //call
-			},
-			overrides: override.StateOverride{
-				accounts[2].addr: override.OverrideAccount{
-					Code: hex2Bytes("608060405234801561000f575f5ffd5b5060043610610034575f3560e01c806328b5e32b146100385780633592d0161461004b575b5f5ffd5b4360405190815260200160405180910390f35b610053610055565b005b61005e4361009d565b60405160200161006e91906101a5565b60408051601f198184030181529082905262461bcd60e51b8252610094916004016101cd565b60405180910390fd5b6060815f036100c35750506040805180820190915260018152600360fc1b602082015290565b815f5b81156100ec57806100d681610216565b91506100e59050600a83610242565b91506100c6565b5f8167ffffffffffffffff81111561010657610106610255565b6040519080825280601f01601f191660200182016040528015610130576020820181803683370190505b508593509050815b831561019c57610149600a85610269565b61015490603061027c565b60f81b8261016183610295565b92508281518110610174576101746102aa565b60200101906001600160f81b03191690815f1a905350610195600a85610242565b9350610138565b50949350505050565b650313637b1b5960d51b81525f82518060208501600685015e5f920160060191825250919050565b602081525f82518060208401528060208501604085015e5f604082850101526040601f19601f83011684010191505092915050565b634e487b7160e01b5f52601160045260245ffd5b5f6001820161022757610227610202565b5060010190565b634e487b7160e01b5f52601260045260245ffd5b5f826102505761025061022e565b500490565b634e487b7160e01b5f52604160045260245ffd5b5f826102775761027761022e565b500690565b8082018082111561028f5761028f610202565b92915050565b5f816102a3576102a3610202565b505f190190565b634e487b7160e01b5f52603260045260245ffdfea2646970667358221220a253cad1e2e3523b8c053c1d0cd1e39d7f3bafcedd73440a244872701f05dab264736f6c634300081c0033"),
+				Input: &hexutil.Bytes{
+					0x43,             // NUMBER
+					0x60, 0x00, 0x52, // MSTORE offset 0
+					0x60, 0x20, 0x60, 0x00, 0xf3,
 				},
 			},
-			blockOverrides: override.BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
+			blockOverrides: BlockOverrides{Number: (*hexutil.Big)(big.NewInt(11))},
 			want:           "0x000000000000000000000000000000000000000000000000000000000000000b",
-		},
-		// Clear storage trie
-		{
-			name:        "clear-storage-trie",
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From: &accounts[1].addr,
-				// Yul:
-				// object "Test" {
-				//    code {
-				//        let dad := 0x0000000000000000000000000000000000000dad
-				//        if eq(balance(dad), 0) {
-				//            revert(0, 0)
-				//        }
-				//        let slot := sload(0)
-				//        mstore(0, slot)
-				//        return(0, 32)
-				//    }
-				// }
-				Input: hex2Bytes("610dad6000813103600f57600080fd5b6000548060005260206000f3"),
-			},
-			overrides: override.StateOverride{
-				dad: override.OverrideAccount{
-					State: map[common.Hash]common.Hash{},
-				},
-			},
-			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		},
 		// Invalid blob tx
 		{
-			name:        "invalid-blob-tx",
 			blockNumber: rpc.LatestBlockNumber,
 			call: TransactionArgs{
 				From:       &accounts[1].addr,
@@ -1092,23 +1020,23 @@ func TestCall(t *testing.T) {
 			},
 			expectErr: core.ErrBlobTxCreate,
 		},
+		// BOR Doens't support blob tx
 		// BLOBHASH opcode
-		{
-			name:        "blobhash-opcode",
-			blockNumber: rpc.LatestBlockNumber,
-			call: TransactionArgs{
-				From:       &accounts[1].addr,
-				To:         &randomAccounts[2].addr,
-				BlobHashes: []common.Hash{{0x01, 0x22}},
-				BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
-			},
-			overrides: override.StateOverride{
-				randomAccounts[2].addr: {
-					Code: hex2Bytes("60004960005260206000f3"),
-				},
-			},
-			want: "0x0122000000000000000000000000000000000000000000000000000000000000",
-		},
+		// {
+		// 	blockNumber: rpc.LatestBlockNumber,
+		// 	call: TransactionArgs{
+		// 		From:       &accounts[1].addr,
+		// 		To:         &randomAccounts[2].addr,
+		// 		BlobHashes: []common.Hash{{0x01, 0x22}},
+		// 		BlobFeeCap: (*hexutil.Big)(big.NewInt(1)),
+		// 	},
+		// 	overrides: override.StateOverride{
+		// 		randomAccounts[2].addr: {
+		// 			Code: hex2Bytes("60004960005260206000f3"),
+		// 		},
+		// 	},
+		// 	want: "0x0122000000000000000000000000000000000000000000000000000000000000",
+		// },
 		// Clear the entire storage set
 		{
 			blockNumber: rpc.LatestBlockNumber,
@@ -1130,1182 +1058,34 @@ func TestCall(t *testing.T) {
 			},
 			overrides: override.StateOverride{
 				dad: override.OverrideAccount{
-					State: map[common.Hash]common.Hash{},
+					State: &map[common.Hash]common.Hash{},
 				},
 			},
 			want: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
-	for _, tc := range testSuite {
+	for i, tc := range testSuite {
 		result, err := api.Call(context.Background(), tc.call, &rpc.BlockNumberOrHash{BlockNumber: &tc.blockNumber}, &tc.overrides, &tc.blockOverrides)
 		if tc.expectErr != nil {
 			if err == nil {
-				t.Errorf("test %s: want error %v, have nothing", tc.name, tc.expectErr)
+				t.Errorf("test %d: want error %v, have nothing", i, tc.expectErr)
 				continue
 			}
 			if !errors.Is(err, tc.expectErr) {
 				// Second try
 				if !reflect.DeepEqual(err, tc.expectErr) {
-					t.Errorf("test %s: error mismatch, want %v, have %v", tc.name, tc.expectErr, err)
+					t.Errorf("test %d: error mismatch, want %v, have %v", i, tc.expectErr, err)
 				}
 			}
 			continue
 		}
 		if err != nil {
-			t.Errorf("test %s: want no error, have %v", tc.name, err)
+			t.Errorf("test %d: want no error, have %v", i, err)
 			continue
 		}
 		if !reflect.DeepEqual(result.String(), tc.want) {
-			t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, result.String(), tc.want)
+			t.Errorf("test %d, result mismatch, have\n%v\n, want\n%v\n", i, result.String(), tc.want)
 		}
-	}
-}
-
-func TestSimulateV1(t *testing.T) {
-	t.Parallel()
-	// Initialize test accounts
-	var (
-		accounts     = newAccounts(3)
-		fixedAccount = newTestAccount()
-		genBlocks    = 10
-		signer       = types.HomesteadSigner{}
-		cac          = common.HexToAddress("0x0000000000000000000000000000000000000cac")
-		bab          = common.HexToAddress("0x0000000000000000000000000000000000000bab")
-		coinbase     = "0x000000000000000000000000000000000000ffff"
-		genesis      = &core.Genesis{
-			Config: params.TestChainConfig,
-			Alloc: types.GenesisAlloc{
-				accounts[0].addr: {Balance: big.NewInt(params.Zen)},
-				accounts[1].addr: {Balance: big.NewInt(params.Zen)},
-				accounts[2].addr: {Balance: big.NewInt(params.Zen)},
-				// Yul:
-				// object "Test" {
-				//     code {
-				//         let dad := 0x0000000000000000000000000000000000000dad
-				//         selfdestruct(dad)
-				//     }
-				// }
-				cac: {Balance: big.NewInt(params.Zen), Code: common.Hex2Bytes("610dad80ff")},
-				bab: {
-					Balance: big.NewInt(1),
-					// object "Test" {
-					//    code {
-					//        let value1 := sload(1)
-					//        let value2 := sload(2)
-					//
-					//        // Shift value1 by 128 bits to the left by multiplying it with 2^128
-					//        value1 := mul(value1, 0x100000000000000000000000000000000)
-					//
-					//        // Concatenate value1 and value2
-					//        let concatenatedValue := add(value1, value2)
-					//
-					//        // Store the result in memory and return it
-					//        mstore(0, concatenatedValue)
-					//        return(0, 0x20)
-					//    }
-					// }
-					Code: common.FromHex("0x600154600254700100000000000000000000000000000000820291508082018060005260206000f3"),
-					Storage: map[common.Hash]common.Hash{
-						common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(10)),
-						common.BigToHash(big.NewInt(2)): common.BigToHash(big.NewInt(12)),
-					},
-				},
-			},
-		}
-		sha256Address = common.BytesToAddress([]byte{0x02})
-	)
-	api := NewBlockChainAPI(newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
-		b.SetCoinbase(common.HexToAddress(coinbase))
-		// Transfer from account[0] to account[1]
-		//    value: 1000 wei
-		//    fee:   0 wei
-		tx, _ := types.SignTx(types.NewTx(&types.LegacyTx{
-			Nonce:    uint64(i),
-			To:       &accounts[1].addr,
-			Value:    big.NewInt(1000),
-			Gas:      params.TxGas,
-			GasPrice: b.BaseFee(),
-			Data:     nil,
-		}), signer, accounts[0].key)
-		b.AddTx(tx)
-	}))
-	var (
-		randomAccounts   = newAccounts(4)
-		latest           = rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber)
-		includeTransfers = true
-		validation       = true
-	)
-	type log struct {
-		Address     common.Address `json:"address"`
-		Topics      []common.Hash  `json:"topics"`
-		Data        hexutil.Bytes  `json:"data"`
-		BlockNumber hexutil.Uint64 `json:"blockNumber"`
-		// Skip txHash
-		//TxHash common.Hash `json:"transactionHash" gencodec:"required"`
-		TxIndex hexutil.Uint `json:"transactionIndex"`
-		//BlockHash common.Hash  `json:"blockHash"`
-		Index hexutil.Uint `json:"logIndex"`
-	}
-	type callErr struct {
-		Message string
-		Code    int
-	}
-	type callRes struct {
-		ReturnValue string `json:"returnData"`
-		Error       callErr
-		Logs        []log
-		GasUsed     string
-		Status      string
-	}
-	type blockRes struct {
-		Number string
-		//Hash   string
-		// Ignore timestamp
-		GasLimit      string
-		GasUsed       string
-		Miner         string
-		BaseFeePerGas string
-		Calls         []callRes
-	}
-	var testSuite = []struct {
-		name             string
-		blocks           []simBlock
-		tag              rpc.BlockNumberOrHash
-		includeTransfers *bool
-		validation       *bool
-		expectErr        error
-		want             []blockRes
-	}{
-		// State build-up over calls:
-		// First value transfer OK after state override.
-		// Second one should succeed because of first transfer.
-		{
-			name: "simple",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(1000))},
-				},
-				Calls: []TransactionArgs{{
-					From:  &randomAccounts[0].addr,
-					To:    &randomAccounts[1].addr,
-					Value: (*hexutil.Big)(big.NewInt(1000)),
-				}, {
-					From:  &randomAccounts[1].addr,
-					To:    &randomAccounts[2].addr,
-					Value: (*hexutil.Big)(big.NewInt(1000)),
-				}, {
-					To: &randomAccounts[3].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xf618",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		}, {
-			// State build-up over blocks.
-			name: "simple-multi-block",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(2000))},
-				},
-				Calls: []TransactionArgs{
-					{
-						From:  &randomAccounts[0].addr,
-						To:    &randomAccounts[1].addr,
-						Value: (*hexutil.Big)(big.NewInt(1000)),
-					}, {
-						From:  &randomAccounts[0].addr,
-						To:    &randomAccounts[3].addr,
-						Value: (*hexutil.Big)(big.NewInt(1000)),
-					},
-				},
-			}, {
-				StateOverrides: &override.StateOverride{
-					randomAccounts[3].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(0))},
-				},
-				Calls: []TransactionArgs{
-					{
-						From:  &randomAccounts[1].addr,
-						To:    &randomAccounts[2].addr,
-						Value: (*hexutil.Big)(big.NewInt(1000)),
-					},
-				},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa410",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x5208",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		}, {
-			// insufficient funds
-			name: "insufficient-funds",
-			tag:  latest,
-			blocks: []simBlock{{
-				Calls: []TransactionArgs{{
-					From:  &randomAccounts[0].addr,
-					To:    &randomAccounts[1].addr,
-					Value: (*hexutil.Big)(big.NewInt(1000)),
-				}},
-			}},
-			want:      nil,
-			expectErr: &invalidTxError{Message: fmt.Sprintf("err: insufficient funds for gas * price + value: address %s have 0 want 1000 (supplied gas 4712388)", randomAccounts[0].addr.String()), Code: errCodeInsufficientFunds},
-		}, {
-			// EVM error
-			name: "evm-error",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: override.OverrideAccount{Code: hex2Bytes("f3")},
-				},
-				Calls: []TransactionArgs{{
-					From: &randomAccounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x47e7c4",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					Error:       callErr{Message: "stack underflow (0 <=> 2)", Code: errCodeVMError},
-					GasUsed:     "0x47e7c4",
-					Logs:        []log{},
-					Status:      "0x0",
-				}},
-			}},
-		}, {
-			// Block overrides should work, each call is simulated on a different block number
-			name: "block-overrides",
-			tag:  latest,
-			blocks: []simBlock{{
-				BlockOverrides: &override.BlockOverrides{
-					Number:       (*hexutil.Big)(big.NewInt(11)),
-					FeeRecipient: &cac,
-				},
-				Calls: []TransactionArgs{
-					{
-						From: &accounts[0].addr,
-						Input: &hexutil.Bytes{
-							0x43,             // NUMBER
-							0x60, 0x00, 0x52, // MSTORE offset 0
-							0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
-						},
-					},
-				},
-			}, {
-				BlockOverrides: &override.BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(12)),
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[1].addr,
-					Input: &hexutil.Bytes{
-						0x43,             // NUMBER
-						0x60, 0x00, 0x52, // MSTORE offset 0
-						0x60, 0x20, 0x60, 0x00, 0xf3,
-					},
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xe891",
-				Miner:         strings.ToLower(cac.String()),
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000b",
-					GasUsed:     "0xe891",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xe891",
-				Miner:         strings.ToLower(cac.String()),
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000000000c",
-					GasUsed:     "0xe891",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Block numbers must be in order.
-		{
-			name: "block-number-order",
-			tag:  latest,
-			blocks: []simBlock{{
-				BlockOverrides: &override.BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(12)),
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[1].addr,
-					Input: &hexutil.Bytes{
-						0x43,             // NUMBER
-						0x60, 0x00, 0x52, // MSTORE offset 0
-						0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
-					},
-				}},
-			}, {
-				BlockOverrides: &override.BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(11)),
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					Input: &hexutil.Bytes{
-						0x43,             // NUMBER
-						0x60, 0x00, 0x52, // MSTORE offset 0
-						0x60, 0x20, 0x60, 0x00, 0xf3, // RETURN
-					},
-				}},
-			}},
-			want:      []blockRes{},
-			expectErr: &invalidBlockNumberError{message: "block numbers must be in order: 11 <= 12"},
-		},
-		// Test on solidity storage example. Set value in one call, read in next.
-		{
-			name: "storage-contract",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: override.OverrideAccount{
-						Code: hex2Bytes("608060405234801561001057600080fd5b50600436106100365760003560e01c80632e64cec11461003b5780636057361d14610059575b600080fd5b610043610075565b60405161005091906100d9565b60405180910390f35b610073600480360381019061006e919061009d565b61007e565b005b60008054905090565b8060008190555050565b60008135905061009781610103565b92915050565b6000602082840312156100b3576100b26100fe565b5b60006100c184828501610088565b91505092915050565b6100d3816100f4565b82525050565b60006020820190506100ee60008301846100ca565b92915050565b6000819050919050565b600080fd5b61010c816100f4565b811461011757600080fd5b5056fea2646970667358221220404e37f487a89a932dca5e77faaf6ca2de3b991f93d230604b1b8daaef64766264736f6c63430008070033"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					// Set value to 5
-					From:  &randomAccounts[0].addr,
-					To:    &randomAccounts[2].addr,
-					Input: hex2Bytes("6057361d0000000000000000000000000000000000000000000000000000000000000005"),
-				}, {
-					// Read value
-					From:  &randomAccounts[0].addr,
-					To:    &randomAccounts[2].addr,
-					Input: hex2Bytes("2e64cec1"),
-				},
-				},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x10683",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0xaacc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000005",
-					GasUsed:     "0x5bb7",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Test logs output.
-		{
-			name: "logs",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: override.OverrideAccount{
-						// Yul code:
-						// object "Test" {
-						//    code {
-						//        let hash:u256 := 0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-						//        log1(0, 0, hash)
-						//        return (0, 0)
-						//    }
-						// }
-						Code: hex2Bytes("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff80600080a1600080f3"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &randomAccounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x5508",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					Logs: []log{{
-						Address:     randomAccounts[2].addr,
-						Topics:      []common.Hash{common.HexToHash("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")},
-						BlockNumber: hexutil.Uint64(11),
-						Data:        hexutil.Bytes{},
-					}},
-					GasUsed: "0x5508",
-					Status:  "0x1",
-				}},
-			}},
-		},
-		// Test ecrecover override
-		{
-			name: "ecrecover-override",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: override.OverrideAccount{
-						// Yul code that returns ecrecover(0, 0, 0, 0).
-						// object "Test" {
-						//    code {
-						//        // Free memory pointer
-						//        let free_ptr := mload(0x40)
-						//
-						//        // Initialize inputs with zeros
-						//        mstore(free_ptr, 0)  // Hash
-						//        mstore(add(free_ptr, 0x20), 0)  // v
-						//        mstore(add(free_ptr, 0x40), 0)  // r
-						//        mstore(add(free_ptr, 0x60), 0)  // s
-						//
-						//        // Call ecrecover precompile (at address 1) with all 0 inputs
-						//        let success := staticcall(gas(), 1, free_ptr, 0x80, free_ptr, 0x20)
-						//
-						//        // Check if the call was successful
-						//        if eq(success, 0) {
-						//            revert(0, 0)
-						//        }
-						//
-						//        // Return the recovered address
-						//        return(free_ptr, 0x14)
-						//    }
-						// }
-						Code: hex2Bytes("6040516000815260006020820152600060408201526000606082015260208160808360015afa60008103603157600080fd5b601482f3"),
-					},
-					common.BytesToAddress([]byte{0x01}): override.OverrideAccount{
-						// Yul code that returns the address of the caller.
-						// object "Test" {
-						//    code {
-						//        let c := caller()
-						//        mstore(0, c)
-						//        return(0xc, 0x14)
-						//    }
-						// }
-						Code: hex2Bytes("33806000526014600cf3"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &randomAccounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x52f6",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					// Caller is in this case the contract that invokes ecrecover.
-					ReturnValue: strings.ToLower(randomAccounts[2].addr.String()),
-					GasUsed:     "0x52f6",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Test moving the sha256 precompile.
-		{
-			name: "precompile-move",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					sha256Address: override.OverrideAccount{
-						// Yul code that returns the calldata.
-						// object "Test" {
-						//    code {
-						//        let size := calldatasize() // Get the size of the calldata
-						//
-						//        // Allocate memory to store the calldata
-						//        let memPtr := msize()
-						//
-						//        // Copy calldata to memory
-						//        calldatacopy(memPtr, 0, size)
-						//
-						//        // Return the calldata from memory
-						//        return(memPtr, size)
-						//    }
-						// }
-						Code:             hex2Bytes("365981600082378181f3"),
-						MovePrecompileTo: &randomAccounts[2].addr,
-					},
-				},
-				Calls: []TransactionArgs{{
-					From:  &randomAccounts[0].addr,
-					To:    &randomAccounts[2].addr,
-					Input: hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
-				}, {
-					From:  &randomAccounts[0].addr,
-					To:    &sha256Address,
-					Input: hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"),
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa58c",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0xec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5",
-					GasUsed:     "0x52dc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x0000000000000000000000000000000000000000000000000000000000000001",
-					GasUsed:     "0x52b0",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Test zen transfers.
-		{
-			name: "transfer-logs",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[0].addr: override.OverrideAccount{
-						Balance: newRPCBalance(big.NewInt(100)),
-						// Yul code that transfers 100 wei to address passed in calldata:
-						// object "Test" {
-						//    code {
-						//        let recipient := shr(96, calldataload(0))
-						//        let value := 100
-						//        let success := call(gas(), recipient, value, 0, 0, 0, 0)
-						//        if eq(success, 0) {
-						//            revert(0, 0)
-						//        }
-						//    }
-						// }
-						Code: hex2Bytes("60003560601c606460008060008084865af160008103601d57600080fd5b505050"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From:  &accounts[0].addr,
-					To:    &randomAccounts[0].addr,
-					Value: (*hexutil.Big)(big.NewInt(50)),
-					Input: hex2Bytes(strings.TrimPrefix(fixedAccount.addr.String(), "0x")),
-				}},
-			}},
-			includeTransfers: &includeTransfers,
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x77dc",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x77dc",
-					Logs: []log{{
-						Address: transferAddress,
-						Topics: []common.Hash{
-							transferTopic,
-							addressToHash(accounts[0].addr),
-							addressToHash(randomAccounts[0].addr),
-						},
-						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(50)).Bytes()),
-						BlockNumber: hexutil.Uint64(11),
-					}, {
-						Address: transferAddress,
-						Topics: []common.Hash{
-							transferTopic,
-							addressToHash(randomAccounts[0].addr),
-							addressToHash(fixedAccount.addr),
-						},
-						Data:        hexutil.Bytes(common.BigToHash(big.NewInt(100)).Bytes()),
-						BlockNumber: hexutil.Uint64(11),
-						Index:       hexutil.Uint(1),
-					}},
-					Status: "0x1",
-				}},
-			}},
-		},
-		// Tests selfdestructed contract.
-		{
-			name: "selfdestruct",
-			tag:  latest,
-			blocks: []simBlock{{
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &cac,
-				}, {
-					From: &accounts[0].addr,
-					// Check that cac is selfdestructed and balance transferred to dad.
-					// object "Test" {
-					//    code {
-					//        let cac := 0x0000000000000000000000000000000000000cac
-					//        let dad := 0x0000000000000000000000000000000000000dad
-					//        if gt(balance(cac), 0) {
-					//            revert(0, 0)
-					//        }
-					//        if gt(extcodesize(cac), 0) {
-					//            revert(0, 0)
-					//        }
-					//        if eq(balance(dad), 0) {
-					//            revert(0, 0)
-					//        }
-					//    }
-					// }
-					Input: hex2Bytes("610cac610dad600082311115601357600080fd5b6000823b1115602157600080fd5b6000813103602e57600080fd5b5050"),
-				}},
-			}, {
-				Calls: []TransactionArgs{{
-					From:  &accounts[0].addr,
-					Input: hex2Bytes("610cac610dad600082311115601357600080fd5b6000823b1115602157600080fd5b6000813103602e57600080fd5b5050"),
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x1b83f",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0xd166",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x",
-					GasUsed:     "0xe6d9",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xe6d9",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0xe6d9",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Enable validation checks.
-		{
-			name: "validation-checks",
-			tag:  latest,
-			blocks: []simBlock{{
-				Calls: []TransactionArgs{{
-					From:  &accounts[2].addr,
-					To:    &cac,
-					Nonce: newUint64(2),
-				}},
-			}},
-			validation: &validation,
-			want:       nil,
-			expectErr:  &invalidTxError{Message: fmt.Sprintf("err: nonce too high: address %s, tx: 2 state: 0 (supplied gas 4712388)", accounts[2].addr), Code: errCodeNonceTooHigh},
-		},
-		// Contract sends tx in validation mode.
-		{
-			name: "validation-checks-from-contract",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: override.OverrideAccount{
-						Balance: newRPCBalance(big.NewInt(2098640803896784)),
-						Code:    hex2Bytes("00"),
-						Nonce:   newUint64(1),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From:                 &randomAccounts[2].addr,
-					To:                   &cac,
-					Nonce:                newUint64(1),
-					MaxFeePerGas:         newInt(233138868),
-					MaxPriorityFeePerGas: newInt(1),
-				}},
-			}},
-			validation: &validation,
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xd166",
-				Miner:         coinbase,
-				BaseFeePerGas: "0xde56ab3",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0xd166",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Successful validation
-		{
-			name: "validation-checks-success",
-			tag:  latest,
-			blocks: []simBlock{{
-				BlockOverrides: &override.BlockOverrides{
-					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
-				},
-				StateOverrides: &override.StateOverride{
-					randomAccounts[0].addr: override.OverrideAccount{Balance: newRPCBalance(big.NewInt(10000000))},
-				},
-				Calls: []TransactionArgs{{
-					From:         &randomAccounts[0].addr,
-					To:           &randomAccounts[1].addr,
-					Value:        (*hexutil.Big)(big.NewInt(1000)),
-					MaxFeePerGas: (*hexutil.Big)(big.NewInt(2)),
-				}},
-			}},
-			validation: &validation,
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x5208",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x1",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x5208",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		// Clear storage.
-		{
-			name: "clear-storage",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: {
-						Code: newBytes(genesis.Alloc[bab].Code),
-						StateDiff: map[common.Hash]common.Hash{
-							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(2)),
-							common.BigToHash(big.NewInt(2)): common.BigToHash(big.NewInt(3)),
-						},
-					},
-					bab: {
-						State: map[common.Hash]common.Hash{
-							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(1)),
-						},
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}, {
-					From: &accounts[0].addr,
-					To:   &bab,
-				}},
-			}, {
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: {
-						State: map[common.Hash]common.Hash{
-							common.BigToHash(big.NewInt(1)): common.BigToHash(big.NewInt(5)),
-						},
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xc542",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x0000000000000000000000000000000200000000000000000000000000000003",
-					GasUsed:     "0x62a1",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x0000000000000000000000000000000100000000000000000000000000000000",
-					GasUsed:     "0x62a1",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x62a1",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x0000000000000000000000000000000500000000000000000000000000000000",
-					GasUsed:     "0x62a1",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		{
-			name: "blockhash-opcode",
-			tag:  latest,
-			blocks: []simBlock{{
-				BlockOverrides: &override.BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(12)),
-				},
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: {
-						Code: hex2Bytes("600035804060008103601057600080fd5b5050"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// Phantom block after base.
-					Input: uint256ToBytes(uint256.NewInt(11)),
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// Canonical block.
-					Input: uint256ToBytes(uint256.NewInt(8)),
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// base block.
-					Input: uint256ToBytes(uint256.NewInt(10)),
-				}},
-			}, {
-				BlockOverrides: &override.BlockOverrides{
-					Number: (*hexutil.Big)(big.NewInt(16)),
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// blocks[0]
-					Input: uint256ToBytes(uint256.NewInt(12)),
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// Phantom after blocks[0]
-					Input: uint256ToBytes(uint256.NewInt(13)),
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x0",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls:         []callRes{},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xf864",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x52cc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x",
-					GasUsed:     "0x52cc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-
-					ReturnValue: "0x",
-					GasUsed:     "0x52cc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xd",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x0",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls:         []callRes{},
-			}, {
-				Number:        "0xe",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x0",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls:         []callRes{},
-			}, {
-				Number:        "0xf",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x0",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls:         []callRes{},
-			}, {
-				Number:        "0x10",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa598",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x",
-					GasUsed:     "0x52cc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-
-					ReturnValue: "0x",
-					GasUsed:     "0x52cc",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-		{
-			name: "basefee-non-validation",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: {
-						// Yul code:
-						// object "Test" {
-						//    code {
-						//        // Get the gas price from the transaction
-						//        let gasPrice := gasprice()
-						//
-						//        // Get the base fee from the block
-						//        let baseFee := basefee()
-						//
-						//        // Store gasPrice and baseFee in memory
-						//        mstore(0x0, gasPrice)
-						//        mstore(0x20, baseFee)
-						//
-						//        // Return the data
-						//        return(0x0, 0x40)
-						//    }
-						// }
-						Code: hex2Bytes("3a489060005260205260406000f3"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// 0 gas price
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// non-zero gas price
-					MaxPriorityFeePerGas: newInt(1),
-					MaxFeePerGas:         newInt(2),
-				},
-				},
-			}, {
-				BlockOverrides: &override.BlockOverrides{
-					BaseFeePerGas: (*hexutil.Big)(big.NewInt(1)),
-				},
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// 0 gas price
-				}, {
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-					// non-zero gas price
-					MaxPriorityFeePerGas: newInt(1),
-					MaxFeePerGas:         newInt(2),
-				},
-				},
-			}, {
-				// Base fee should be 0 to zero even if it was set in previous block.
-				Calls: []TransactionArgs{{
-					From: &accounts[0].addr,
-					To:   &randomAccounts[2].addr,
-				}},
-			}},
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa44e",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xc",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0xa44e",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x1",
-				Calls: []callRes{{
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}, {
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}, {
-				Number:        "0xd",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x5227",
-				Miner:         coinbase,
-				BaseFeePerGas: "0x0",
-				Calls: []callRes{{
-					ReturnValue: "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		}, {
-			name: "basefee-validation-mode",
-			tag:  latest,
-			blocks: []simBlock{{
-				StateOverrides: &override.StateOverride{
-					randomAccounts[2].addr: {
-						// Yul code:
-						// object "Test" {
-						//    code {
-						//        // Get the gas price from the transaction
-						//        let gasPrice := gasprice()
-						//
-						//        // Get the base fee from the block
-						//        let baseFee := basefee()
-						//
-						//        // Store gasPrice and baseFee in memory
-						//        mstore(0x0, gasPrice)
-						//        mstore(0x20, baseFee)
-						//
-						//        // Return the data
-						//        return(0x0, 0x40)
-						//    }
-						// }
-						Code: hex2Bytes("3a489060005260205260406000f3"),
-					},
-				},
-				Calls: []TransactionArgs{{
-					From:                 &accounts[0].addr,
-					To:                   &randomAccounts[2].addr,
-					MaxFeePerGas:         newInt(233138868),
-					MaxPriorityFeePerGas: newInt(1),
-				}},
-			}},
-			validation: &validation,
-			want: []blockRes{{
-				Number:        "0xb",
-				GasLimit:      "0x47e7c4",
-				GasUsed:       "0x5227",
-				Miner:         coinbase,
-				BaseFeePerGas: "0xde56ab3",
-				Calls: []callRes{{
-					ReturnValue: "0x000000000000000000000000000000000000000000000000000000000de56ab4000000000000000000000000000000000000000000000000000000000de56ab3",
-					GasUsed:     "0x5227",
-					Logs:        []log{},
-					Status:      "0x1",
-				}},
-			}},
-		},
-	}
-
-	for _, tc := range testSuite {
-		t.Run(tc.name, func(t *testing.T) {
-			opts := simOpts{BlockStateCalls: tc.blocks}
-			if tc.includeTransfers != nil && *tc.includeTransfers {
-				opts.TraceTransfers = true
-			}
-			if tc.validation != nil && *tc.validation {
-				opts.Validation = true
-			}
-			result, err := api.SimulateV1(context.Background(), opts, &tc.tag)
-			if tc.expectErr != nil {
-				if err == nil {
-					t.Fatalf("test %s: want error %v, have nothing", tc.name, tc.expectErr)
-				}
-				if !errors.Is(err, tc.expectErr) {
-					// Second try
-					if !reflect.DeepEqual(err, tc.expectErr) {
-						t.Errorf("test %s: error mismatch, want %v, have %v", tc.name, tc.expectErr, err)
-					}
-				}
-				return
-			}
-			if err != nil {
-				t.Fatalf("test %s: want no error, have %v", tc.name, err)
-			}
-			// Turn result into res-struct
-			var have []blockRes
-			resBytes, _ := json.Marshal(result)
-			if err := json.Unmarshal(resBytes, &have); err != nil {
-				t.Fatalf("failed to unmarshal result: %v", err)
-			}
-			if !reflect.DeepEqual(have, tc.want) {
-				t.Log(string(resBytes))
-				t.Errorf("test %s, result mismatch, have\n%v\n, want\n%v\n", tc.name, have, tc.want)
-			}
-		})
 	}
 }
 
@@ -2320,6 +1100,8 @@ func TestSignTransaction(t *testing.T) {
 			Alloc:  types.GenesisAlloc{},
 		}
 	)
+	_, acc := newTestAccountManager(t)
+	genesis.Alloc[acc.Address] = types.Account{Balance: big.NewInt(params.Ether)}
 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		b.SetPoS()
 	})
@@ -2411,197 +1193,195 @@ func TestSendBlobTransaction(t *testing.T) {
 	}
 }
 
-func TestFillBlobTransaction(t *testing.T) {
-	t.Parallel()
-	// Initialize test accounts
-	var (
-		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
-		to      = crypto.PubkeyToAddress(key.PublicKey)
-		genesis = &core.Genesis{
-			Config: params.MergedTestChainConfig,
-			Alloc:  types.GenesisAlloc{},
-		}
-		emptyBlob                      = new(kzg4844.Blob)
-		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
-		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
-		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
-		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
-	)
-	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
-		b.SetPoS()
-	})
-	api := NewTransactionAPI(b, nil)
-	type result struct {
-		Hashes  []common.Hash
-		Sidecar *types.BlobTxSidecar
-	}
-	suite := []struct {
-		name string
-		args TransactionArgs
-		err  string
-		want *result
-	}{
-		{
-			name: "TestInvalidParamsCombination1",
-			args: TransactionArgs{
-				From:   &b.acc.Address,
-				To:     &to,
-				Value:  (*hexutil.Big)(big.NewInt(1)),
-				Blobs:  []kzg4844.Blob{{}},
-				Proofs: []kzg4844.Proof{{}},
-			},
-			err: `blob proofs provided while commitments were not`,
-		},
-		{
-			name: "TestInvalidParamsCombination2",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}},
-				Commitments: []kzg4844.Commitment{{}},
-			},
-			err: `blob commitments provided while proofs were not`,
-		},
-		{
-			name: "TestInvalidParamsCount1",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}},
-				Commitments: []kzg4844.Commitment{{}, {}},
-				Proofs:      []kzg4844.Proof{{}, {}},
-			},
-			err: `number of blobs and commitments mismatch (have=2, want=1)`,
-		},
-		{
-			name: "TestInvalidParamsCount2",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}, {}},
-				Commitments: []kzg4844.Commitment{{}, {}},
-				Proofs:      []kzg4844.Proof{{}},
-			},
-			err: `number of blobs and proofs mismatch (have=1, want=2)`,
-		},
-		{
-			name: "TestInvalidProofVerification",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       []kzg4844.Blob{{}, {}},
-				Commitments: []kzg4844.Commitment{{}, {}},
-				Proofs:      []kzg4844.Proof{{}, {}},
-			},
-			err: `failed to verify blob proof: short buffer`,
-		},
-		{
-			name: "TestGenerateBlobHashes",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				Blobs:       emptyBlobs,
-				Commitments: []kzg4844.Commitment{emptyBlobCommit},
-				Proofs:      []kzg4844.Proof{emptyBlobProof},
-			},
-			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
-			},
-		},
-		{
-			name: "TestValidBlobHashes",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				BlobHashes:  []common.Hash{emptyBlobHash},
-				Blobs:       emptyBlobs,
-				Commitments: []kzg4844.Commitment{emptyBlobCommit},
-				Proofs:      []kzg4844.Proof{emptyBlobProof},
-			},
-			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
-			},
-		},
-		{
-			name: "TestInvalidBlobHashes",
-			args: TransactionArgs{
-				From:        &b.acc.Address,
-				To:          &to,
-				Value:       (*hexutil.Big)(big.NewInt(1)),
-				BlobHashes:  []common.Hash{{0x01, 0x22}},
-				Blobs:       emptyBlobs,
-				Commitments: []kzg4844.Commitment{emptyBlobCommit},
-				Proofs:      []kzg4844.Proof{emptyBlobProof},
-			},
-			err: fmt.Sprintf("blob hash verification failed (have=%s, want=%s)", common.Hash{0x01, 0x22}, emptyBlobHash),
-		},
-		{
-			name: "TestGenerateBlobProofs",
-			args: TransactionArgs{
-				From:  &b.acc.Address,
-				To:    &to,
-				Value: (*hexutil.Big)(big.NewInt(1)),
-				Blobs: emptyBlobs,
-			},
-			want: &result{
-				Hashes: []common.Hash{emptyBlobHash},
-				Sidecar: &types.BlobTxSidecar{
-					Blobs:       emptyBlobs,
-					Commitments: []kzg4844.Commitment{emptyBlobCommit},
-					Proofs:      []kzg4844.Proof{emptyBlobProof},
-				},
-			},
-		},
-	}
-	for _, tc := range suite {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			res, err := api.FillTransaction(context.Background(), tc.args)
-			if len(tc.err) > 0 {
-				if err == nil {
-					t.Fatalf("missing error. want: %s", tc.err)
-				} else if err.Error() != tc.err {
-					t.Fatalf("error mismatch. want: %s, have: %s", tc.err, err.Error())
-				}
-				return
-			}
-			if err != nil && len(tc.err) == 0 {
-				t.Fatalf("expected no error. have: %s", err)
-			}
-			if res == nil {
-				t.Fatal("result missing")
-			}
-			want, err := json.Marshal(tc.want)
-			if err != nil {
-				t.Fatalf("failed to encode expected: %v", err)
-			}
-			have, err := json.Marshal(result{Hashes: res.Tx.BlobHashes(), Sidecar: res.Tx.BlobTxSidecar()})
-			if err != nil {
-				t.Fatalf("failed to encode computed sidecar: %v", err)
-			}
-			if !bytes.Equal(have, want) {
-				t.Errorf("blob sidecar mismatch. Have: %s, want: %s", have, want)
-			}
-		})
-	}
-}
+// func TestFillBlobTransaction(t *testing.T) {
+// 	t.Parallel()
+// 	// Initialize test accounts
+// 	var (
+// 		key, _  = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+// 		to      = crypto.PubkeyToAddress(key.PublicKey)
+// 		genesis = &core.Genesis{
+// 			Config: params.MergedTestChainConfig,
+// 			Alloc:  types.GenesisAlloc{},
+// 		}
+// 		emptyBlob                      = new(kzg4844.Blob)
+// 		emptyBlobs                     = []kzg4844.Blob{*emptyBlob}
+// 		emptyBlobCommit, _             = kzg4844.BlobToCommitment(emptyBlob)
+// 		emptyBlobProof, _              = kzg4844.ComputeBlobProof(emptyBlob, emptyBlobCommit)
+// 		emptyBlobHash      common.Hash = kzg4844.CalcBlobHashV1(sha256.New(), &emptyBlobCommit)
+// 	)
+// 	b := newTestBackend(t, 1, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
+// 		b.SetPoS()
+// 	})
+// 	api := NewTransactionAPI(b, nil)
+// 	type result struct {
+// 		Hashes  []common.Hash
+// 		Sidecar *types.BlobTxSidecar
+// 	}
+// 	suite := []struct {
+// 		name string
+// 		args TransactionArgs
+// 		err  string
+// 		want *result
+// 	}{
+// 		{
+// 			name: "TestInvalidParamsCombination1",
+// 			args: TransactionArgs{
+// 				From:   &b.acc.Address,
+// 				To:     &to,
+// 				Value:  (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:  []kzg4844.Blob{{}},
+// 				Proofs: []kzg4844.Proof{{}},
+// 			},
+// 			err: `blob proofs provided while commitments were not`,
+// 		},
+// 		{
+// 			name: "TestInvalidParamsCombination2",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}},
+// 				Commitments: []kzg4844.Commitment{{}},
+// 			},
+// 			err: `blob commitments provided while proofs were not`,
+// 		},
+// 		{
+// 			name: "TestInvalidParamsCount1",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}},
+// 				Commitments: []kzg4844.Commitment{{}, {}},
+// 				Proofs:      []kzg4844.Proof{{}, {}},
+// 			},
+// 			err: `number of blobs and commitments mismatch (have=2, want=1)`,
+// 		},
+// 		{
+// 			name: "TestInvalidParamsCount2",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}, {}},
+// 				Commitments: []kzg4844.Commitment{{}, {}},
+// 				Proofs:      []kzg4844.Proof{{}},
+// 			},
+// 			err: `number of blobs and proofs mismatch (have=1, want=2)`,
+// 		},
+// 		{
+// 			name: "TestInvalidProofVerification",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       []kzg4844.Blob{{}, {}},
+// 				Commitments: []kzg4844.Commitment{{}, {}},
+// 				Proofs:      []kzg4844.Proof{{}, {}},
+// 			},
+// 			err: `failed to verify blob proof: short buffer`,
+// 		},
+// 		{
+// 			name: "TestGenerateBlobHashes",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs:       emptyBlobs,
+// 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 				Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 			},
+// 			want: &result{
+// 				Hashes: []common.Hash{emptyBlobHash},
+// 				Sidecar: &types.BlobTxSidecar{
+// 					Blobs:       emptyBlobs,
+// 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 					Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 				},
+// 			},
+// 		},
+// 		{
+// 			name: "TestValidBlobHashes",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				BlobHashes:  []common.Hash{emptyBlobHash},
+// 				Blobs:       emptyBlobs,
+// 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 				Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 			},
+// 			want: &result{
+// 				Hashes: []common.Hash{emptyBlobHash},
+// 				Sidecar: &types.BlobTxSidecar{
+// 					Blobs:       emptyBlobs,
+// 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 					Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 				},
+// 			},
+// 		},
+// 		{
+// 			name: "TestInvalidBlobHashes",
+// 			args: TransactionArgs{
+// 				From:        &b.acc.Address,
+// 				To:          &to,
+// 				Value:       (*hexutil.Big)(big.NewInt(1)),
+// 				BlobHashes:  []common.Hash{{0x01, 0x22}},
+// 				Blobs:       emptyBlobs,
+// 				Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 				Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 			},
+// 			err: fmt.Sprintf("blob hash verification failed (have=%s, want=%s)", common.Hash{0x01, 0x22}, emptyBlobHash),
+// 		},
+// 		{
+// 			name: "TestGenerateBlobProofs",
+// 			args: TransactionArgs{
+// 				From:  &b.acc.Address,
+// 				To:    &to,
+// 				Value: (*hexutil.Big)(big.NewInt(1)),
+// 				Blobs: emptyBlobs,
+// 			},
+// 			want: &result{
+// 				Hashes: []common.Hash{emptyBlobHash},
+// 				Sidecar: &types.BlobTxSidecar{
+// 					Blobs:       emptyBlobs,
+// 					Commitments: []kzg4844.Commitment{emptyBlobCommit},
+// 					Proofs:      []kzg4844.Proof{emptyBlobProof},
+// 				},
+// 			},
+// 		},
+// 	}
+// 	for _, tc := range suite {
+// 		t.Run(tc.name, func(t *testing.T) {
+// 			res, err := api.FillTransaction(context.Background(), tc.args)
+// 			if len(tc.err) > 0 {
+// 				if err == nil {
+// 					t.Fatalf("missing error. want: %s", tc.err)
+// 				} else if err.Error() != tc.err {
+// 					t.Fatalf("error mismatch. want: %s, have: %s", tc.err, err.Error())
+// 				}
+// 				return
+// 			}
+// 			if err != nil && len(tc.err) == 0 {
+// 				t.Fatalf("expected no error. have: %s", err)
+// 			}
+// 			if res == nil {
+// 				t.Fatal("result missing")
+// 			}
+// 			want, err := json.Marshal(tc.want)
+// 			if err != nil {
+// 				t.Fatalf("failed to encode expected: %v", err)
+// 			}
+// 			have, err := json.Marshal(result{Hashes: res.Tx.BlobHashes(), Sidecar: res.Tx.BlobTxSidecar()})
+// 			if err != nil {
+// 				t.Fatalf("failed to encode computed sidecar: %v", err)
+// 			}
+// 			if !bytes.Equal(have, want) {
+// 				t.Errorf("blob sidecar mismatch. Have: %s, want: %s", have, want)
+// 			}
+// 		})
+// 	}
+// }
 
 func argsFromTransaction(tx *types.Transaction, from common.Address) TransactionArgs {
 	var (
@@ -2644,38 +1424,14 @@ func newAccounts(n int) (accounts []account) {
 	return accounts
 }
 
-func newTestAccount() account {
-	// testKey is a private key to use for funding a tester account.
-	key, _ := crypto.HexToECDSA("b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291")
-	// testAddr is the Zenanet address of the tester account.
-	addr := crypto.PubkeyToAddress(key.PublicKey)
-	return account{key: key, addr: addr}
-}
-
-func newRPCBalance(balance *big.Int) *hexutil.Big {
+func newRPCBalance(balance *big.Int) **hexutil.Big {
 	rpcBalance := (*hexutil.Big)(balance)
-	return rpcBalance
+	return &rpcBalance
 }
 
 func hex2Bytes(str string) *hexutil.Bytes {
-	rpcBytes := hexutil.Bytes(common.FromHex(str))
+	rpcBytes := hexutil.Bytes(common.Hex2Bytes(str))
 	return &rpcBytes
-}
-
-func newUint64(v uint64) *hexutil.Uint64 {
-	rpcUint64 := hexutil.Uint64(v)
-	return &rpcUint64
-}
-
-func newBytes(b []byte) *hexutil.Bytes {
-	rpcBytes := hexutil.Bytes(b)
-	return &rpcBytes
-}
-
-func uint256ToBytes(v *uint256.Int) *hexutil.Bytes {
-	b := v.Bytes32()
-	r := hexutil.Bytes(b[:])
-	return &r
 }
 
 func TestRPCMarshalBlock(t *testing.T) {
@@ -2888,6 +1644,10 @@ func TestRPCMarshalBlock(t *testing.T) {
 }
 
 func TestRPCGetBlockOrHeader(t *testing.T) {
+	// Note: Upstream (geth) tests have a different genesis hash as it has a different
+	// state root hash due to allocating balance separately in test backend. Because
+	// that is commented out in bor, we use the old genesis hash in the test files.
+
 	t.Parallel()
 
 	// Initialize test accounts
@@ -3097,6 +1857,11 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 			fullTx:    true,
 			file:      "hash-pending-fullTx",
 		},
+		// 26. safe block
+		{
+			blockNumber: rpc.SafeBlockNumber,
+			file:        "tag-safe",
+		},
 	}
 
 	for i, tt := range testSuite {
@@ -3142,7 +1907,12 @@ func TestRPCGetBlockOrHeader(t *testing.T) {
 }
 
 func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Hash) {
-	config := *params.MergedTestChainConfig
+	config := *params.TestChainConfig
+	//TODO: Mainnet TimeStmp Fork allowed
+	zero := uint64(0)
+	config.ShanghaiTime = &zero
+	config.CancunTime = &zero
+
 	var (
 		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
 		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
@@ -3172,6 +1942,10 @@ func setupReceiptBackend(t *testing.T, genBlocks int) (*testBackend, []common.Ha
 		signer   = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
 		txHashes = make([]common.Hash, genBlocks)
 	)
+
+	// Set the terminal total difficulty in the config
+	genesis.Config.TerminalTotalDifficulty = big.NewInt(0)
+	genesis.Config.TerminalTotalDifficultyPassed = true
 
 	backend := newTestBackend(t, genBlocks, genesis, beacon.New(ethash.NewFaker()), func(i int, b *core.BlockGen) {
 		var (
@@ -3299,104 +2073,6 @@ func TestRPCGetTransactionReceipt(t *testing.T) {
 	}
 }
 
-func TestRPCGetBlockReceipts(t *testing.T) {
-	t.Parallel()
-
-	var (
-		genBlocks  = 6
-		backend, _ = setupReceiptBackend(t, genBlocks)
-		api        = NewBlockChainAPI(backend)
-	)
-	blockHashes := make([]common.Hash, genBlocks+1)
-	ctx := context.Background()
-	for i := 0; i <= genBlocks; i++ {
-		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
-		if err != nil {
-			t.Errorf("failed to get block: %d err: %v", i, err)
-		}
-		blockHashes[i] = header.Hash()
-	}
-
-	var testSuite = []struct {
-		test rpc.BlockNumberOrHash
-		file string
-	}{
-		// 0. block without any txs(hash)
-		{
-			test: rpc.BlockNumberOrHashWithHash(blockHashes[0], false),
-			file: "number-0",
-		},
-		// 1. block without any txs(number)
-		{
-			test: rpc.BlockNumberOrHashWithNumber(0),
-			file: "number-1",
-		},
-		// 2. earliest tag
-		{
-			test: rpc.BlockNumberOrHashWithNumber(rpc.EarliestBlockNumber),
-			file: "tag-earliest",
-		},
-		// 3. latest tag
-		{
-			test: rpc.BlockNumberOrHashWithNumber(rpc.LatestBlockNumber),
-			file: "tag-latest",
-		},
-		// 4. block with legacy transfer tx(hash)
-		{
-			test: rpc.BlockNumberOrHashWithHash(blockHashes[1], false),
-			file: "block-with-legacy-transfer-tx",
-		},
-		// 5. block with contract create tx(number)
-		{
-			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(2)),
-			file: "block-with-contract-create-tx",
-		},
-		// 6. block with legacy contract call tx(hash)
-		{
-			test: rpc.BlockNumberOrHashWithHash(blockHashes[3], false),
-			file: "block-with-legacy-contract-call-tx",
-		},
-		// 7. block with dynamic fee tx(number)
-		{
-			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(4)),
-			file: "block-with-dynamic-fee-tx",
-		},
-		// 8. block is empty
-		{
-			test: rpc.BlockNumberOrHashWithHash(common.Hash{}, false),
-			file: "hash-empty",
-		},
-		// 9. block is not found
-		{
-			test: rpc.BlockNumberOrHashWithHash(common.HexToHash("deadbeef"), false),
-			file: "hash-notfound",
-		},
-		// 10. block is not found
-		{
-			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(genBlocks + 1)),
-			file: "block-notfound",
-		},
-		// 11. block with blob tx
-		{
-			test: rpc.BlockNumberOrHashWithNumber(rpc.BlockNumber(6)),
-			file: "block-with-blob-tx",
-		},
-	}
-
-	for i, tt := range testSuite {
-		var (
-			result interface{}
-			err    error
-		)
-		result, err = api.GetBlockReceipts(context.Background(), tt.test)
-		if err != nil {
-			t.Errorf("test %d: want no error, have %v", i, err)
-			continue
-		}
-		testRPCResponseWithFile(t, i, result, "eth_getBlockReceipts", tt.file)
-	}
-}
-
 func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc string, file string) {
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
@@ -3414,6 +2090,250 @@ func testRPCResponseWithFile(t *testing.T, testid int, result interface{}, rpc s
 	require.JSONEqf(t, string(want), string(data), "test %d: json not match, want: %s, have: %s", testid, string(want), string(data))
 }
 
-func addressToHash(a common.Address) common.Hash {
-	return common.BytesToHash(a.Bytes())
+func TestRPCGetTransactionReceiptsByBlock(t *testing.T) {
+	t.Parallel()
+
+	// Initialize test accounts
+	var (
+		acc1Key, _ = crypto.HexToECDSA("8a1f9a8f95be41cd7ccb6168179afb4504aefe388d1e14474d32c45c72ce7b7a")
+		acc2Key, _ = crypto.HexToECDSA("49a7b37aa6f6645917e7b807e9d1c00d4fa71f18343b0d4122a4d2df64dd6fee")
+		acc1Addr   = crypto.PubkeyToAddress(acc1Key.PublicKey)
+		acc2Addr   = crypto.PubkeyToAddress(acc2Key.PublicKey)
+		contract   = common.HexToAddress("0000000000000000000000000000000000031ec7")
+		genesis    = &core.Genesis{
+			Config: params.TestChainConfig,
+			Alloc: types.GenesisAlloc{
+				acc1Addr: {Balance: big.NewInt(params.Zen)},
+				acc2Addr: {Balance: big.NewInt(params.Zen)},
+				contract: {Balance: big.NewInt(params.Zen), Code: common.FromHex("0x608060405234801561001057600080fd5b506004361061002b5760003560e01c8063a9059cbb14610030575b600080fd5b61004a6004803603810190610045919061016a565b610060565b60405161005791906101c5565b60405180910390f35b60008273ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff167fddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef846040516100bf91906101ef565b60405180910390a36001905092915050565b600080fd5b600073ffffffffffffffffffffffffffffffffffffffff82169050919050565b6000610101826100d6565b9050919050565b610111816100f6565b811461011c57600080fd5b50565b60008135905061012e81610108565b92915050565b6000819050919050565b61014781610134565b811461015257600080fd5b50565b6000813590506101648161013e565b92915050565b60008060408385031215610181576101806100d1565b5b600061018f8582860161011f565b92505060206101a085828601610155565b9150509250929050565b60008115159050919050565b6101bf816101aa565b82525050565b60006020820190506101da60008301846101b6565b92915050565b6101e981610134565b82525050565b600060208201905061020460008301846101e0565b9291505056fea2646970667358221220b469033f4b77b9565ee84e0a2f04d496b18160d26034d54f9487e57788fd36d564736f6c63430008120033"),},
+			},
+		}
+		genTxs    = 5
+		genBlocks = 1
+		signer    = types.LatestSignerForChainID(params.TestChainConfig.ChainID)
+		txHashes  = make([]common.Hash, 0, genTxs)
+	)
+
+	backend := newTestBackend(t, genBlocks, genesis, ethash.NewFaker(), func(i int, b *core.BlockGen) {
+		switch i {
+		case 0:
+			// transfer 1000wei
+			tx1, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(0), To: &acc2Addr, Value: big.NewInt(1000), Gas: params.TxGas, GasPrice: b.BaseFee(), Data: nil}), types.HomesteadSigner{}, acc1Key)
+			b.AddTx(tx1)
+			txHashes = append(txHashes, tx1.Hash())
+
+			// create contract
+			tx2, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(1), To: nil, Gas: 53100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040")}), signer, acc1Key)
+			b.AddTx(tx2)
+			txHashes = append(txHashes, tx2.Hash())
+
+			// with logs
+			// transfer(address to, uint256 value)
+			data3 := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+			tx3, _ := types.SignTx(types.NewTx(&types.LegacyTx{Nonce: uint64(2), To: &contract, Gas: 60000, GasPrice: b.BaseFee(), Data: common.FromHex(data3)}), signer, acc1Key)
+			b.AddTx(tx3)
+			txHashes = append(txHashes, tx3.Hash())
+
+			// dynamic fee with logs
+			// transfer(address to, uint256 value)
+			data4 := fmt.Sprintf("0xa9059cbb%s%s", common.HexToHash(common.BigToAddress(big.NewInt(int64(i + 1))).Hex()).String()[2:], common.BytesToHash([]byte{byte(i + 11)}).String()[2:])
+			fee := big.NewInt(500)
+			fee.Add(fee, b.BaseFee())
+			tx4, _ := types.SignTx(types.NewTx(&types.DynamicFeeTx{Nonce: uint64(3), To: &contract, Gas: 60000, Value: big.NewInt(1), GasTipCap: big.NewInt(500), GasFeeCap: fee, Data: common.FromHex(data4)}), signer, acc1Key)
+			b.AddTx(tx4)
+			txHashes = append(txHashes, tx4.Hash())
+
+			// access list with contract create
+			accessList := types.AccessList{{
+				Address:     contract,
+				StorageKeys: []common.Hash{{0}},
+			}}
+			tx5, _ := types.SignTx(types.NewTx(&types.AccessListTx{Nonce: uint64(4), To: nil, Gas: 58100, GasPrice: b.BaseFee(), Data: common.FromHex("0x60806040"), AccessList: accessList}), signer, acc1Key)
+			b.AddTx(tx5)
+			txHashes = append(txHashes, tx5.Hash())
+		}
+	})
+
+	api := NewBlockChainAPI(backend)
+	blockHashes := make([]common.Hash, genBlocks+1)
+	ctx := context.Background()
+	for i := 0; i <= genBlocks; i++ {
+		header, err := backend.HeaderByNumber(ctx, rpc.BlockNumber(i))
+		if err != nil {
+			t.Errorf("failed to get block: %d err: %v", i, err)
+		}
+		blockHashes[i] = header.Hash()
+	}
+	blockNrOrHash := rpc.BlockNumberOrHashWithHash(blockHashes[1], true)
+
+	var testSuite = []struct {
+		txHash common.Hash
+		want   string
+	}{
+		// 0. normal success
+		{
+			txHash: txHashes[0],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x5208",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0x5208",
+				"logs": [
+				  {
+					"address": "0x0000000000000000000000000000000000001010",
+					"topics": [
+					  "0xe6497e3ee548a3372136af2fcb0696db31fc6cf20260707645068bd3fe97f3c4",
+					  "0x0000000000000000000000000000000000000000000000000000000000001010",
+					  "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
+					  "0x0000000000000000000000000d3ab14bbad3d99f4203bd7a11acb94882050e7e"
+					],
+					"data": "0x00000000000000000000000000000000000000000000000000000000000003e80000000000000000000000000000000000000000000000000de0a5fd640afa000000000000000000000000000000000000000000000000000de0b6b3a76400000000000000000000000000000000000000000000000000000de0a5fd640af6180000000000000000000000000000000000000000000000000de0b6b3a76403e8",
+					"blockNumber": "0x1",
+					"transactionHash": "0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e",
+					"transactionIndex": "0x0",
+					"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+					"logIndex": "0x0",
+					"removed": false
+				  }
+				],
+				"logsBloom": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000008080000000000000000000000000000000000000000000000000000000008000000000000000000001000000200000000000000000000000000000000008020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004000000000000000000000800000000000000000000000800000108000000000000000000000000000000000000000000000000020000000000000000000100000",
+				"status": "0x1",
+				"to": "0x0d3ab14bbad3d99f4203bd7a11acb94882050e7e",
+				"transactionHash": "0x644a31c354391520d00e95b9affbbb010fc79ac268144ab8e28207f4cf51097e",
+				"transactionIndex": "0x0",
+				"type": "0x0"
+			  }`,
+		},
+		// 1. create contract
+		{
+			txHash: txHashes[1],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": "0xae9bea628c4ce503dcfd7e305cab4e29e7476592",
+				"cumulativeGasUsed": "0x12156",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0xcf4e",
+				"logs": [],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"status": "0x1",
+				"to": null,
+				"transactionHash": "0x705a7fca1d214002ee90d4e1c651b53e3506e6d5e3a539e9a7f7bf05b49add91",
+				"transactionIndex": "0x1",
+				"type": "0x0"
+			  }`,
+		},
+		// 2. with logs success
+		{
+			txHash: txHashes[2],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x17f7e",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0x5e28",
+				"logs": [
+				  {
+					"address": "0x0000000000000000000000000000000000031ec7",
+					"topics": [
+					  "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+					  "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
+					  "0x0000000000000000000000000000000000000000000000000000000000000001"
+					],
+					"data": "0x000000000000000000000000000000000000000000000000000000000000000b",
+					"blockNumber": "0x1",
+					"transactionHash": "0xa228af0975b99799bd28331085a6966aba2fb5814a8d89aabc342462aa40429a",
+					"transactionIndex": "0x2",
+					"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+					"logIndex": "0x1",
+					"removed": false
+				  }
+				],
+				"logsBloom": "0x00000000000000000000008000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000800000000000000008000000000000000000040000000000000020000000080000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000800000000000000000000000000000000000000040000000000000000000000000000000000000000020000000000000000000000000",
+				"status": "0x1",
+				"to": "0x0000000000000000000000000000000000031ec7",
+				"transactionHash": "0xa228af0975b99799bd28331085a6966aba2fb5814a8d89aabc342462aa40429a",
+				"transactionIndex": "0x2",
+				"type": "0x0"
+			  }`,
+		},
+		// 3. dynamic tx with logs success
+		{
+			txHash: txHashes[3],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": null,
+				"cumulativeGasUsed": "0x1d30b",
+				"effectiveGasPrice": "0x342772b4",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0x538d",
+				"logs": [
+				  {
+					"address": "0x0000000000000000000000000000000000001010",
+					"topics": [
+					  "0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63",
+					  "0x0000000000000000000000000000000000000000000000000000000000001010",
+					  "0x000000000000000000000000703c4b2bd70c169f5717101caee543299fc946c7",
+					  "0x0000000000000000000000000000000000000000000000000000000000000000"
+					],
+					"data": "0x0000000000000000000000000000000000000000000000000000000000a32f640000000000000000000000000000000000000000000000000de06892fa4b3d9800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000de06892f9a80e340000000000000000000000000000000000000000000000000000000000a32f64",
+					"blockNumber": "0x1",
+					"transactionHash": "0xc2cc458a65bc96f642d4a2063cce162b0da642613d801271bdbc4aa7e775f3ed",
+					"transactionIndex": "0x3",
+					"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+					"logIndex": "0x2",
+					"removed": false
+				  }
+				],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000800000000000000000000100000020000000000000020000000000000000000800000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000004000000000000000000001800000000000000000000000000000100000000020000000000000000000000000000000000000000020000000000000000000100000",
+				"status": "0x0",
+				"to": "0x0000000000000000000000000000000000031ec7",
+				"transactionHash": "0xc2cc458a65bc96f642d4a2063cce162b0da642613d801271bdbc4aa7e775f3ed",
+				"transactionIndex": "0x3",
+				"type": "0x2"
+			  }`,
+		},
+		// 4. access list tx with create contract
+		{
+			txHash: txHashes[4],
+			want: `{
+				"blockHash": "0x1728b788dfe51e507d25f14f01414b5a17f807953c13833811d2afae1982b53b",
+				"blockNumber": "0x1",
+				"contractAddress": "0xfdaa97661a584d977b4d3abb5370766ff5b86a18",
+				"cumulativeGasUsed": "0x2b325",
+				"effectiveGasPrice": "0x342770c0",
+				"from": "0x703c4b2bd70c169f5717101caee543299fc946c7",
+				"gasUsed": "0xe01a",
+				"logs": [],
+				"logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+				"status": "0x1",
+				"to": null,
+				"transactionHash": "0x1e1161cf3fd01a02fc9c5ee66fc45a4805b3828bf41edd54213c20d97fc12b1d",
+				"transactionIndex": "0x4",
+				"type": "0x1"
+			  }`,
+		},
+	}
+
+	receipts, err := api.GetTransactionReceiptsByBlock(context.Background(), blockNrOrHash)
+	if err != nil {
+		t.Fatal("api error")
+	}
+
+	for i, tt := range testSuite {
+		data, err := json.Marshal(receipts[i])
+		if err != nil {
+			t.Errorf("test %d: json marshal error", i)
+			continue
+		}
+		want, have := tt.want, string(data)
+		require.JSONEqf(t, want, have, "test %d: json not match, want: %s, have: %s", i, want, have)
+	}
 }

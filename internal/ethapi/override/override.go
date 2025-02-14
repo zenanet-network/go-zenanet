@@ -20,13 +20,13 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
 	"github.com/zenanet-network/go-zenanet/core/state"
 	"github.com/zenanet-network/go-zenanet/core/tracing"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/core/vm"
-	"github.com/holiman/uint256"
 )
 
 // OverrideAccount indicates the overriding fields of account during the execution
@@ -86,7 +86,7 @@ func (diff *StateOverride) Apply(statedb *state.StateDB, precompiles vm.Precompi
 		}
 		// Override account nonce.
 		if account.Nonce != nil {
-			statedb.SetNonce(addr, uint64(*account.Nonce), tracing.NonceChangeUnspecified)
+			statedb.SetNonce(addr, uint64(*account.Nonce))
 		}
 		// Override account(contract) code.
 		if account.Code != nil {

@@ -110,7 +110,7 @@ func ApplyMessage(
 	return gasUsed, nil
 }
 
-func ApplyBorMessage(vmenv *vm.EVM, msg Callmsg) (*core.ExecutionResult, error) {
+func ApplyEireneMessage(vmenv *vm.EVM, msg Callmsg) (*core.ExecutionResult, error) {
 	initialGas := msg.Gas()
 
 	// Apply the transaction to the current state (included in the env)

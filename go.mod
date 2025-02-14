@@ -150,6 +150,7 @@ require (
 	github.com/xsleonard/go-merkle v1.1.0 // indirect
 	go.opentelemetry.io/otel v1.34.0 // indirect
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
+	go.uber.org/goleak v1.3.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

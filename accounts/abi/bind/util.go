@@ -30,18 +30,12 @@ import (
 // WaitMined waits for tx to be mined on the blockchain.
 // It stops waiting when the context is canceled.
 func WaitMined(ctx context.Context, b DeployBackend, tx *types.Transaction) (*types.Receipt, error) {
-	return WaitMinedHash(ctx, b, tx.Hash())
-}
-
-// WaitMinedHash waits for a transaction with the provided hash to be mined on the blockchain.
-// It stops waiting when the context is canceled.
-func WaitMinedHash(ctx context.Context, b DeployBackend, hash common.Hash) (*types.Receipt, error) {
 	queryTicker := time.NewTicker(time.Second)
 	defer queryTicker.Stop()
 
-	logger := log.New("hash", hash)
+	logger := log.New("hash", tx.Hash())
 	for {
-		receipt, err := b.TransactionReceipt(ctx, hash)
+		receipt, err := b.TransactionReceipt(ctx, tx.Hash())
 		if err == nil {
 			return receipt, nil
 		}
@@ -61,22 +55,19 @@ func WaitMinedHash(ctx context.Context, b DeployBackend, hash common.Hash) (*typ
 	}
 }
 
+
 // WaitDeployed waits for a contract deployment transaction and returns the on-chain
 // contract address when it is mined. It stops waiting when ctx is canceled.
 func WaitDeployed(ctx context.Context, b DeployBackend, tx *types.Transaction) (common.Address, error) {
 	if tx.To() != nil {
 		return common.Address{}, errors.New("tx is not contract creation")
 	}
-	return WaitDeployedHash(ctx, b, tx.Hash())
-}
 
-// WaitDeployedHash waits for a contract deployment transaction with the provided hash and returns the on-chain
-// contract address when it is mined. It stops waiting when ctx is canceled.
-func WaitDeployedHash(ctx context.Context, b DeployBackend, hash common.Hash) (common.Address, error) {
-	receipt, err := WaitMinedHash(ctx, b, hash)
+	receipt, err := WaitMined(ctx, b, tx)
 	if err != nil {
 		return common.Address{}, err
 	}
+
 	if receipt.ContractAddress == (common.Address{}) {
 		return common.Address{}, errors.New("zero address")
 	}
@@ -87,5 +78,6 @@ func WaitDeployedHash(ctx context.Context, b DeployBackend, hash common.Hash) (c
 	if err == nil && len(code) == 0 {
 		err = ErrNoCodeAfterDeploy
 	}
+
 	return receipt.ContractAddress, err
 }

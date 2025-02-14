@@ -24,15 +24,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/zenanet-network/go-zenanet"
 	"github.com/zenanet-network/go-zenanet/accounts/abi"
 	"github.com/zenanet-network/go-zenanet/accounts/abi/bind"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
+	"github.com/zenanet-network/go-zenanet/core/state"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/crypto"
+	"github.com/zenanet-network/go-zenanet/internal/ethapi"
 	"github.com/zenanet-network/go-zenanet/rlp"
-	"github.com/stretchr/testify/assert"
+	"github.com/zenanet-network/go-zenanet/rpc"
 )
 
 func mockSign(addr common.Address, tx *types.Transaction) (*types.Transaction, error) { return tx, nil }
@@ -92,6 +95,10 @@ func (mc *mockCaller) CodeAt(ctx context.Context, contract common.Address, block
 func (mc *mockCaller) CallContract(ctx context.Context, call zenanet.CallMsg, blockNumber *big.Int) ([]byte, error) {
 	mc.callContractBlockNumber = blockNumber
 	return mc.callContractBytes, mc.callContractErr
+}
+
+func (mc *mockCaller) CallWithState(ctx context.Context, args ethapi.TransactionArgs, blockNrOrHash *rpc.BlockNumberOrHash, state *state.StateDB, overrides *ethapi.StateOverride, blockOverrides *ethapi.BlockOverrides) (hexutil.Bytes, error) {
+	return mc.CallContract(ctx, zenanet.CallMsg{}, nil)
 }
 
 type mockPendingCaller struct {

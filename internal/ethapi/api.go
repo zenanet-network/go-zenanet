@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/holiman/uint256"
+
 	"github.com/zenanet-network/go-zenanet/accounts"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
@@ -34,7 +36,9 @@ import (
 	"github.com/zenanet-network/go-zenanet/consensus"
 	"github.com/zenanet-network/go-zenanet/consensus/misc/eip1559"
 	"github.com/zenanet-network/go-zenanet/core"
+	"github.com/zenanet-network/go-zenanet/core/rawdb"
 	"github.com/zenanet-network/go-zenanet/core/state"
+	"github.com/zenanet-network/go-zenanet/core/tracing"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/core/vm"
 	"github.com/zenanet-network/go-zenanet/crypto"
@@ -301,6 +305,94 @@ type BlockChainAPI struct {
 // NewBlockChainAPI creates a new Zenanet blockchain API.
 func NewBlockChainAPI(b Backend) *BlockChainAPI {
 	return &BlockChainAPI{b}
+}
+// GetTransactionReceiptsByBlock returns the transaction receipts for the given block number or hash.
+func (api *BlockChainAPI) GetTransactionReceiptsByBlock(ctx context.Context, blockNrOrHash rpc.BlockNumberOrHash) ([]map[string]interface{}, error) {
+	block, err := api.b.BlockByNumberOrHash(ctx, blockNrOrHash)
+	if err != nil {
+		return nil, err
+	}
+
+	if block == nil {
+		return nil, errors.New("block not found")
+	}
+
+	receipts, err := api.b.GetReceipts(ctx, block.Hash())
+	if err != nil {
+		return nil, err
+	}
+
+	txs := block.Transactions()
+
+	var txHash common.Hash
+
+	eireneReceipt := rawdb.ReadEireneReceipt(api.b.ChainDb(), block.Hash(), block.NumberU64(), api.b.ChainConfig())
+	if eireneReceipt != nil {
+		receipts = append(receipts, eireneReceipt)
+
+		txHash = types.GetDerivedEireneTxHash(types.EireneReceiptKey(block.Number().Uint64(), block.Hash()))
+		if txHash != (common.Hash{}) {
+			eireneTx, _, _, _, _ := api.b.GetEireneBlockTransactionWithBlockHash(ctx, txHash, block.Hash())
+			txs = append(txs, eireneTx)
+		}
+	}
+
+	if len(txs) != len(receipts) {
+		return nil, fmt.Errorf("txs length %d doesn't equal to receipts' length %d", len(txs), len(receipts))
+	}
+
+	txReceipts := make([]map[string]interface{}, 0, len(txs))
+
+	for idx, receipt := range receipts {
+		tx := txs[idx]
+
+		signer := types.MakeSigner(api.b.ChainConfig(), block.Number(), block.Time())
+		from, _ := types.Sender(signer, tx)
+
+		fields := map[string]interface{}{
+			"blockHash":         block.Hash(),
+			"blockNumber":       hexutil.Uint64(block.NumberU64()),
+			"transactionHash":   tx.Hash(),
+			"transactionIndex":  hexutil.Uint64(idx),
+			"from":              from,
+			"to":                tx.To(),
+			"gasUsed":           hexutil.Uint64(receipt.GasUsed),
+			"cumulativeGasUsed": hexutil.Uint64(receipt.CumulativeGasUsed),
+			"contractAddress":   nil,
+			"logs":              receipt.Logs,
+			"logsBloom":         receipt.Bloom,
+			"type":              hexutil.Uint(tx.Type()),
+			"effectiveGasPrice": (*hexutil.Big)(receipt.EffectiveGasPrice),
+		}
+
+		if receipt.EffectiveGasPrice == nil {
+			fields["effectiveGasPrice"] = new(hexutil.Big)
+		}
+
+		// Assign receipt status or post state.
+		if len(receipt.PostState) > 0 {
+			fields["root"] = hexutil.Bytes(receipt.PostState)
+		} else {
+			fields["status"] = hexutil.Uint(receipt.Status)
+		}
+
+		if receipt.Logs == nil {
+			fields["logs"] = []*types.Log{}
+		}
+
+		if borReceipt != nil && idx == len(receipts)-1 {
+			fields["transactionHash"] = txHash
+		}
+
+		// If the ContractAddress is 20 0x0 bytes, assume it is not a contract creation
+		if receipt.ContractAddress != (common.Address{}) {
+			fields["contractAddress"] = receipt.ContractAddress
+		}
+
+		txReceipts = append(txReceipts, fields)
+	}
+
+	return txReceipts, nil
 }
 
 // ChainId is the EIP-155 replay-protection chain id for the current Zenanet chain config.
@@ -620,6 +712,67 @@ func (api *BlockChainAPI) GetBlockReceipts(ctx context.Context, blockNrOrHash rp
 	return result, nil
 }
 
+// TODO: update to this code
+// OverrideAccount indicates the overriding fields of account during the execution
+// of a message call.
+// Note, state and stateDiff can't be specified at the same time. If state is
+// set, message execution will only use the data in the given state. Otherwise
+// if stateDiff is set, all diff will be applied first and then execute the call
+// message.
+type OverrideAccount struct {
+	Nonce     *hexutil.Uint64              `json:"nonce"`
+	Code      *hexutil.Bytes               `json:"code"`
+	Balance   **hexutil.Big                `json:"balance"`
+	State     *map[common.Hash]common.Hash `json:"state"`
+	StateDiff *map[common.Hash]common.Hash `json:"stateDiff"`
+}
+
+// StateOverride is the collection of overridden accounts.
+type StateOverride map[common.Address]OverrideAccount
+
+// Apply overrides the fields of specified accounts into the given state.
+func (diff *StateOverride) Apply(statedb *state.StateDB) error {
+	if diff == nil {
+		return nil
+	}
+
+	for addr, account := range *diff {
+		// Override account nonce.
+		if account.Nonce != nil {
+			statedb.SetNonce(addr, uint64(*account.Nonce))
+		}
+		// Override account(contract) code.
+		if account.Code != nil {
+			statedb.SetCode(addr, *account.Code)
+		}
+		// Override account balance.
+		if account.Balance != nil {
+			u256Balance, _ := uint256.FromBig((*big.Int)(*account.Balance))
+			statedb.SetBalance(addr, u256Balance, tracing.BalanceChangeUnspecified)
+		}
+
+		if account.State != nil && account.StateDiff != nil {
+			return fmt.Errorf("account %s has both 'state' and 'stateDiff'", addr.Hex())
+		}
+		// Replace entire state if caller requires.
+		if account.State != nil {
+			statedb.SetStorage(addr, *account.State)
+		}
+		// Apply state diff into specified accounts.
+		if account.StateDiff != nil {
+			for key, value := range *account.StateDiff {
+				statedb.SetState(addr, key, value)
+			}
+		}
+	}
+	// Now finalize the changes. Finalize is normally performed between transactions.
+	// By using finalize, the overrides are semantically behaving as
+	// if they were created in a transaction just before the tracing occur.
+	statedb.Finalise(false)
+	return nil
+}
+
+
 // ChainContextBackend provides methods required to implement ChainContext.
 type ChainContextBackend interface {
 	Engine() consensus.Engine
@@ -655,6 +808,56 @@ func (context *ChainContext) GetHeader(hash common.Hash, number uint64) *types.H
 
 func (context *ChainContext) Config() *params.ChainConfig {
 	return context.b.ChainConfig()
+}
+
+// BlockOverrides is a set of header fields to override.
+type BlockOverrides struct {
+	Number      *hexutil.Big
+	Difficulty  *hexutil.Big
+	Time        *hexutil.Uint64
+	GasLimit    *hexutil.Uint64
+	Coinbase    *common.Address
+	Random      *common.Hash
+	BaseFee     *hexutil.Big
+	BlobBaseFee *hexutil.Big
+}
+
+// Apply overrides the given header fields into the given block context.
+func (diff *BlockOverrides) Apply(blockCtx *vm.BlockContext) {
+	if diff == nil {
+		return
+	}
+
+	if diff.Number != nil {
+		blockCtx.BlockNumber = diff.Number.ToInt()
+	}
+
+	if diff.Difficulty != nil {
+		blockCtx.Difficulty = diff.Difficulty.ToInt()
+	}
+
+	if diff.Time != nil {
+		blockCtx.Time = uint64(*diff.Time)
+	}
+
+	if diff.GasLimit != nil {
+		blockCtx.GasLimit = uint64(*diff.GasLimit)
+	}
+
+	if diff.Coinbase != nil {
+		blockCtx.Coinbase = *diff.Coinbase
+	}
+
+	if diff.Random != nil {
+		blockCtx.Random = diff.Random
+	}
+
+	if diff.BaseFee != nil {
+		blockCtx.BaseFee = diff.BaseFee.ToInt()
+	}
+	if diff.BlobBaseFee != nil {
+		blockCtx.BlobBaseFee = diff.BlobBaseFee.ToInt()
+	}
 }
 
 func doCall(ctx context.Context, b Backend, args TransactionArgs, state *state.StateDB, header *types.Header, overrides *override.StateOverride, blockOverrides *override.BlockOverrides, timeout time.Duration, globalGasCap uint64) (*core.ExecutionResult, error) {

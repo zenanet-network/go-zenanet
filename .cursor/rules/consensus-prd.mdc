@@ -1,0 +1,124 @@
+---
+description: Consensus Product Requirements Document
+globs: 
+---
+# Go-ZenaNet 합의 알고리즘 수정 PRD
+1. 개요
+
+- 프로젝트명: Go-ZenaNet core
+- 합의 알고리즘: Eirene Peace Consensus (EPC)
+- 목표: 빠른 블록 생성과 안정성 보장
+
+
+## 2. 핵심 아키텍처
+### 합의 알고리즘 구조
+```sh
+/consensus/eirene/
+├── api/                # API 인터페이스
+├── abi/                # 스마트 컨트랙트 ABI
+├── clerk/              # 트랜잭션 처리
+├── contract/           # 컨트랙트 관리
+├── validator/          # 검증자 관리
+├── statefull/         # 상태 관리
+└── span/              # 블록 생산자 관리
+```
+
+### 주요 컴포넌트
+#### 1. Peace Council System
+```go
+goCopyconst (
+    BlockInterval = 3 * time.Second
+    CouncilSize = 21
+    HarmonyNodesMax = 100
+    CheckpointPeriod = 300  // 15분
+)
+```
+
+#### 2. 검증자 구조
+
+```go
+goCopytype ValidatorSet struct {
+    PeaceCouncil []common.Address    // 코어 검증자
+    HarmonyNodes []common.Address    // 일반 검증자
+    PeaceScores map[common.Address]uint64
+}
+```
+#### 3. 차별화 요소
+##### 1. Peace Score System
+
+네트워크 안정성 지표
+검증자 신뢰도 평가
+성능 기반 보상 체계
+
+##### 2. 블록 생성 매커니즘
+
+3초 블록 생성
+Peace Council 우선 순위
+동적 검증자 선택
+
+##### 3. 체크포인트 시스템
+
+15분 주기 체크포인트
+상태 동기화
+네트워크 안정성 검증
+
+4. 구현 상세
+1. 합의 알고리즘 (eirene.go)
+goCopytype PeaceConsensus struct {
+    validatorSet     *ValidatorSet
+    peaceScore      uint64
+    blockInterval   time.Duration
+    checkpointSpan  uint64
+}
+2. 스팬 관리 (span.go)
+goCopytype Span struct {
+    ID            uint64
+    StartBlock    uint64
+    EndBlock      uint64
+    Validators    []common.Address
+    PeaceScores   map[common.Address]uint64
+}
+3. 검증자 선택 (selection.go)
+goCopyfunc SelectBlockProducer(span *Span, blockNum uint64) common.Address {
+    // Peace Score 기반 가중치 적용
+    // 상위 검증자 우선 선택
+}
+5. 성능 최적화
+
+블록 생성
+
+
+목표: 3초 블록 타임
+최대 TPS: 2000+
+체크포인트: 15분
+
+
+검증자 구성
+
+
+Peace Council: 21개 노드
+Harmony Nodes: ~100개 노드
+최소 스테이킹: 차등 적용
+
+6. 보안 및 안정성
+
+Peace Score System
+
+
+네트워크 참여도: 40%
+블록 생성 성공률: 30%
+응답 시간: 30%
+
+
+페널티 시스템
+
+
+이중 서명: Peace Score -50%
+오프라인: Peace Score -30%
+블록 누락: Peace Score -20%
+
+7. 향후 개선 사항
+
+동적 블록 간격 조정
+AI 기반 검증자 평가
+크로스체인 브릿지 통합

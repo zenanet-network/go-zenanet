@@ -318,6 +318,8 @@ func TestCustomErrors(t *testing.T) {
 	check("MyError", "MyError(uint256)")
 }
 
+
+
 func TestCustomErrorUnpackIntoInterface(t *testing.T) {
 	t.Parallel()
 	errorName := "MyError"
