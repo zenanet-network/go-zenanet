@@ -709,7 +709,8 @@ func (b *SimulatedBackend) callContract(ctx context.Context, call zenanet.CallMs
 	vmEnv := vm.NewEVM(evmContext, txContext, stateDB, b.config, vm.Config{NoBaseFee: true})
 	gasPool := new(core.GasPool).AddGas(math.MaxUint64)
 
-	return core.ApplyMessage(vmEnv, msg, gasPool, context.Background())
+	// TODO: delete to context.Background()
+	return core.ApplyMessage(vmEnv, msg, gasPool)
 }
 
 // SendTransaction updates the pending block to include the given transaction.

@@ -57,6 +57,7 @@ type Config struct {
 	EnablePreimageRecording bool  // Enables recording of SHA3/keccak preimages
 	ExtraEips               []int // Additional EIPS that are to be enabled
 	EnableWitnessCollection bool  // true if witness collection is enabled
+	StatelessSelfValidation bool
 }
 
 // ScopeContext contains the things that are per-call, such as stack and memory,

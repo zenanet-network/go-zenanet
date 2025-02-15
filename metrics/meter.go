@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+
 // GetOrRegisterMeter returns an existing Meter or constructs and registers a
 // new Meter.
 // Be sure to unregister the meter from the registry once it is of no use to

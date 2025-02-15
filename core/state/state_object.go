@@ -21,15 +21,17 @@ import (
 	"fmt"
 	"maps"
 	"slices"
+	"sync"
 	"time"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
+	"github.com/zenanet-network/go-zenanet/core/tracing"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/log"
 	"github.com/zenanet-network/go-zenanet/rlp"
 	"github.com/zenanet-network/go-zenanet/trie/trienode"
-	"github.com/holiman/uint256"
 )
 
 type Storage map[common.Hash]common.Hash
@@ -55,6 +57,7 @@ type stateObject struct {
 	trie Trie   // storage trie, which becomes non-nil on first access
 	code []byte // contract bytecode, which gets set when code is loaded
 
+	storageMutex   sync.Mutex
 	originStorage  Storage // Storage entries that have been accessed within the current block
 	dirtyStorage   Storage // Storage entries that have been modified within the current transaction
 	pendingStorage Storage // Storage entries that have been modified within the current block
@@ -453,25 +456,37 @@ func (s *stateObject) commit() (*accountUpdate, *trienode.NodeSet, error) {
 
 // AddBalance adds amount to s's balance.
 // It is used to add funds to the destination account of a transfer.
-// returns the previous balance
-func (s *stateObject) AddBalance(amount *uint256.Int) uint256.Int {
+func (s *stateObject) AddBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
 	// EIP161: We must check emptiness for the objects such that the account
 	// clearing (0,0,0 objects) can take effect.
 	if amount.IsZero() {
 		if s.empty() {
 			s.touch()
 		}
-		return *(s.Balance())
+
+		return
 	}
-	return s.SetBalance(new(uint256.Int).Add(s.Balance(), amount))
+	s.SetBalance(new(uint256.Int).Add(s.Balance(), amount), reason)
 }
 
-// SetBalance sets the balance for the object, and returns the previous balance.
-func (s *stateObject) SetBalance(amount *uint256.Int) uint256.Int {
-	prev := *s.data.Balance
-	s.db.journal.balanceChange(s.address, s.data.Balance)
+// SubBalance removes amount from s's balance.
+// It is used to remove funds from the origin account of a transfer.
+func (s *stateObject) SubBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
+	if amount.IsZero() {
+		return
+	}
+	s.SetBalance(new(uint256.Int).Sub(s.Balance(), amount), reason)
+}
+
+func (s *stateObject) SetBalance(amount *uint256.Int, reason tracing.BalanceChangeReason) {
+	s.db.journal.append(balanceChange{
+		account: s.address,
+		prev:    new(uint256.Int).Set(s.data.Balance),
+	})
+	if s.db.logger != nil && s.db.logger.OnBalanceChange != nil {
+		s.db.logger.OnBalanceChange(s.address, s.Balance().ToBig(), amount.ToBig(), reason)
+	}
 	s.setBalance(amount)
-	return prev
 }
 
 func (s *stateObject) setBalance(amount *uint256.Int) {

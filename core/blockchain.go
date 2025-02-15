@@ -29,6 +29,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/zenanet-network/go-zenanet"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/lru"
 	"github.com/zenanet-network/go-zenanet/common/mclock"
@@ -102,6 +103,7 @@ const (
 	bodyCacheLimit     = 256
 	blockCacheLimit    = 256
 	receiptsCacheLimit = 32
+	maxFutureBlocks    = 256
 	txLookupCacheLimit = 1024
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
@@ -234,6 +236,7 @@ type BlockChain struct {
 	hc            *HeaderChain
 	rmLogsFeed    event.Feed
 	chainFeed     event.Feed
+	chainSideFeed event.Feed
 	chainHeadFeed event.Feed
 	logsFeed      event.Feed
 	blockProcFeed event.Feed
@@ -257,6 +260,9 @@ type BlockChain struct {
 	txLookupLock  sync.RWMutex
 	txLookupCache *lru.Cache[common.Hash, txLookup]
 
+	// future blocks are blocks added for later processing
+	futureBlocks *lru.Cache[common.Hash, *types.Block]
+
 	wg            sync.WaitGroup
 	quit          chan struct{} // shutdown signal, closed in Stop.
 	stopping      atomic.Bool   // false if chain is running, true when stopped
@@ -279,7 +285,7 @@ type BlockChain struct {
 // NewBlockChain returns a fully initialised block chain using information
 // available in the database. It initialises the default Zenanet Validator
 // and Processor.
-func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, txLookupLimit *uint64) (*BlockChain, error) {
+func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis, overrides *ChainOverrides, engine consensus.Engine, vmConfig vm.Config, shouldPreserve func(header *types.Header) bool, txLookupLimit *uint64, checker zenanet.ChainValidator) (*BlockChain, error) {
 	if cacheConfig == nil {
 		cacheConfig = defaultCacheConfig
 	}
@@ -319,6 +325,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, genesis *Genesis
 		receiptsCache: lru.NewCache[common.Hash, []*types.Receipt](receiptsCacheLimit),
 		blockCache:    lru.NewCache[common.Hash, *types.Block](blockCacheLimit),
 		txLookupCache: lru.NewCache[common.Hash, txLookup](txLookupCacheLimit),
+		futureBlocks:  lru.NewCache[common.Hash, *types.Block](maxFutureBlocks),
 		engine:        engine,
 		vmConfig:      vmConfig,
 		logger:        vmConfig.Tracer,
@@ -1763,6 +1770,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 			// We can assume that logs are empty here, since the only way for consecutive
 			// Clique blocks to have the same state is if there are no transactions.
 			lastCanon = block
+
 			continue
 		}
 		// Retrieve the parent block and it's state to execute on top
@@ -1771,7 +1779,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		if parent == nil {
 			parent = bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
 		}
-		statedb, err := state.New(parent.Root, bc.statedb)
+		statedb, err := state.New(parent.Root, bc.statedb, nil)
 		if err != nil {
 			return nil, it.index, err
 		}
@@ -1798,7 +1806,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, setHead bool, makeWitness 
 		var followupInterrupt atomic.Bool
 		if !bc.cacheConfig.TrieCleanNoPrefetch {
 			if followup, err := it.peek(); followup != nil && err == nil {
-				throwaway, _ := state.New(parent.Root, bc.statedb)
+				throwaway, _ := state.New(parent.Root, bc.statedb, nil)
 
 				go func(start time.Time, followup *types.Block, throwaway *state.StateDB) {
 					// Disable tracing for prefetcher executions.

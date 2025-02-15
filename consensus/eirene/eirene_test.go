@@ -63,13 +63,13 @@ func TestGenesisContractChange(t *testing.T) {
 	}
 
 	db := rawdb.NewMemoryDatabase()
-
+	trieDB := triedb.NewDatabase(db, triedb.HashDefaults)
 	genesis := genspec.MustCommit(db, triedb.NewDatabase(db, triedb.HashDefaults))
 
-	statedb, err := state.New(genesis.Root(), state.NewDatabase(db), nil)
+	statedb, err := state.New(genesis.Root(), state.NewDatabase(trieDB, nil), nil)
 	require.NoError(t, err)
 
-	chain, err := core.NewBlockChain(rawdb.NewMemoryDatabase(), nil, genspec, nil, b, vm.Config{}, nil, nil, nil)
+	chain, err := core.NewBlockChain(db, nil, genspec, nil, b, vm.Config{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	addBlock := func(root common.Hash, num int64) (common.Hash, *state.StateDB) {
@@ -80,11 +80,11 @@ func TestGenesisContractChange(t *testing.T) {
 		b.Finalize(chain, h, statedb, &types.Body{Withdrawals: nil, Transactions: nil, Uncles: nil})
 
 		// write state to database
-		root, err := statedb.Commit(0, false)
+		root, err := statedb.Commit(0, false, false)
 		require.NoError(t, err)
 		require.NoError(t, statedb.Database().TrieDB().Commit(root, true))
 
-		statedb, err := state.New(h.Root, state.NewDatabase(db), nil)
+		statedb, err := state.New(h.Root, state.NewDatabase(trieDB, nil), nil)
 		require.NoError(t, err)
 
 		return root, statedb

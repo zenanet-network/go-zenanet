@@ -18,26 +18,31 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"math/big"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/tracing"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/core/vm"
 	"github.com/zenanet-network/go-zenanet/crypto/kzg4844"
 	"github.com/zenanet-network/go-zenanet/params"
-	"github.com/holiman/uint256"
 )
 
 // ExecutionResult includes all output after executing given evm
 // message no matter the execution itself is successful or not.
 type ExecutionResult struct {
-	UsedGas     uint64 // Total used gas, not including the refunded gas
-	RefundedGas uint64 // Total gas refunded after execution
-	Err         error  // Any error encountered during the execution(listed in core/vm/errors.go)
-	ReturnData  []byte // Returned data from evm(function result or data supplied with revert opcode)
+	UsedGas              uint64 // Total used gas, not including the refunded gas
+	RefundedGas          uint64 // Total gas refunded after execution
+	Err                  error  // Any error encountered during the execution(listed in core/vm/errors.go)
+	ReturnData           []byte // Returned data from evm(function result or data supplied with revert opcode
+	SenderInitBalance    *big.Int
+	FeeBurnt             *big.Int
+	BurntContractAddress common.Address
+	FeeTipped            *big.Int
 }
 
 // Unwrap returns the internal evm error which allows us for further
@@ -164,6 +169,11 @@ type Message struct {
 
 	// When SkipFromEOACheck is true, the message sender is not checked to be an EOA.
 	SkipFromEOACheck bool
+
+	// When SkipAccountChecks is true, the message nonce is not checked against the
+	// account nonce in state. It also disables checking that the sender is an EOA.
+	// This field will be set to true for operations like RPC eth_call.
+	SkipAccountChecks bool
 }
 
 // TransactionToMessage converts a transaction into a Message.
@@ -179,6 +189,7 @@ func TransactionToMessage(tx *types.Transaction, s types.Signer, baseFee *big.In
 		Data:                  tx.Data(),
 		AccessList:            tx.AccessList(),
 		SetCodeAuthorizations: tx.SetCodeAuthorizations(),
+		SkipAccountChecks:     false,
 		SkipNonceChecks:       false,
 		SkipFromEOACheck:      false,
 		BlobHashes:            tx.BlobHashes(),
@@ -487,7 +498,7 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 		ret, _, st.gasRemaining, vmerr = st.evm.Create(sender, msg.Data, st.gasRemaining, value)
 	} else {
 		// Increment the nonce for the next transaction.
-		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1, tracing.NonceChangeEoACall)
+		st.state.SetNonce(msg.From, st.state.GetNonce(msg.From)+1)
 
 		// Apply EIP-7702 authorizations.
 		if msg.SetCodeAuthorizations != nil {
@@ -506,8 +517,9 @@ func (st *stateTransition) execute() (*ExecutionResult, error) {
 			st.state.AddAddressToAccessList(addr)
 		}
 
+		//TODO: Add to context.Background where is it?!
 		// Execute the transaction's call.
-		ret, st.gasRemaining, vmerr = st.evm.Call(sender, st.to(), msg.Data, st.gasRemaining, value)
+		ret, st.gasRemaining, vmerr = st.evm.Call(vm.ContractRef(sender), st.to(), msg.Data, st.gasRemaining, value, context.Background())
 	}
 
 	// Compute refund counter, capped to a refund quotient.
@@ -602,7 +614,7 @@ func (st *stateTransition) applyAuthorization(auth *types.SetCodeAuthorization) 
 	}
 
 	// Update nonce and account code.
-	st.state.SetNonce(authority, auth.Nonce+1, tracing.NonceChangeAuthorization)
+	st.state.SetNonce(authority, auth.Nonce+1)
 	if auth.Address == (common.Address{}) {
 		// Delegation to zero address means clear.
 		st.state.SetCode(authority, nil)

@@ -2,9 +2,7 @@
 
 Golang execution layer implementation of the Zenanet protocol.
 
-[![API Reference](
-https://pkg.go.dev/badge/github.com/zenanet-network/go-zenanet
-)](https://pkg.go.dev/github.com/zenanet-network/go-zenanet?tab=doc)
+[![API Reference](https://pkg.go.dev/badge/github.com/zenanet-network/go-zenanet)](https://pkg.go.dev/github.com/zenanet-network/go-zenanet?tab=doc)
 [![Go Report Card](https://goreportcard.com/badge/github.com/zenanet-network/go-zenanet)](https://goreportcard.com/report/github.com/zenanet-network/go-zenanet)
 [![Travis](https://app.travis-ci.com/zenanet/go-zenanet.svg?branch=master)](https://app.travis-ci.com/github/zenanet/go-zenanet)
 [![Discord](https://img.shields.io/badge/discord-join%20chat-blue.svg)](https://discord.gg/nthXNEv)
@@ -39,9 +37,9 @@ directory.
 | **`gzen`** | Our main Zenanet CLI client. It is the entry point into the Zenanet network (main-, test- or private net), capable of running as a full node (default), archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Zenanet network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `gzen --help` and the [CLI page](https://gzen.ethereum.org/docs/fundamentals/command-line-options) for command line options. |
 |   `clef`   | Stand-alone signing tool, which can be used as a backend signer for `gzen`.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 |  `devp2p`  | Utilities to interact with nodes on the networking layer, without running a full blockchain.                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-|  `abigen`  | Source code generator to convert Zenanet contract definitions into easy-to-use, compile-time type-safe Go packages. It operates on plain [Zenanet contract ABIs](https://docs.soliditylang.org/en/develop/abi-spec.html) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://gzen.ethereum.org/docs/developers/dapp-developer/native-bindings) page for details.                                  |
-|   `evm`    | Developer utility version of the EVM (Zenanet Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug run`).                                                                                                                                                                                                                                               |
-| `rlpdump`  | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)) dumps (data encoding used by the Zenanet protocol both network as well as consensus wise) to user-friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                |
+|  `abigen`  | Source code generator to convert Zenanet contract definitions into easy-to-use, compile-time type-safe Go packages. It operates on plain [Zenanet contract ABIs](https://docs.soliditylang.org/en/develop/abi-spec.html) with expanded functionality if the contract bytecode is also available. However, it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://gzen.ethereum.org/docs/developers/dapp-developer/native-bindings) page for details.               |
+|   `evm`    | Developer utility version of the EVM (Zenanet Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow isolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug run`).                                                                                                                                                                                                                                                |
+| `rlpdump`  | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://ethereum.org/en/developers/docs/data-structures-and-encoding/rlp)) dumps (data encoding used by the Zenanet protocol both network as well as consensus wise) to user-friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`).                                                                                                                                                                                 |
 
 ## Running `gzen`
 
@@ -54,17 +52,17 @@ on how you can run your own `gzen` instance.
 
 Minimum:
 
-* CPU with 4+ cores
-* 8GB RAM
-* 1TB free storage space to sync the Mainnet
-* 8 MBit/sec download Internet service
+- CPU with 4+ cores
+- 8GB RAM
+- 1TB free storage space to sync the Mainnet
+- 8 MBit/sec download Internet service
 
 Recommended:
 
-* Fast CPU with 8+ cores
-* 16GB+ RAM
-* High-performance SSD with at least 1TB of free space
-* 25+ MBit/sec download Internet service
+- Fast CPU with 8+ cores
+- 16GB+ RAM
+- High-performance SSD with at least 1TB of free space
+- 25+ MBit/sec download Internet service
 
 ### Full node on the main Zenanet network
 
@@ -78,15 +76,16 @@ $ gzen console
 ```
 
 This command will:
- * Start `gzen` in snap sync mode (default, can be changed with the `--syncmode` flag),
-   causing it to download more data in exchange for avoiding processing the entire history
-   of the Zenanet network, which is very CPU intensive.
- * Start the built-in interactive [JavaScript console](https://gzen.ethereum.org/docs/interacting-with-gzen/javascript-console),
-   (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md) 
-   (note: the `web3` version bundled within `gzen` is very old, and not up to date with official docs),
-   as well as `gzen`'s own [management APIs](https://gzen.ethereum.org/docs/interacting-with-gzen/rpc).
-   This tool is optional and if you leave it out you can always attach it to an already running
-   `gzen` instance with `gzen attach`.
+
+- Start `gzen` in snap sync mode (default, can be changed with the `--syncmode` flag),
+  causing it to download more data in exchange for avoiding processing the entire history
+  of the Zenanet network, which is very CPU intensive.
+- Start the built-in interactive [JavaScript console](https://gzen.ethereum.org/docs/interacting-with-gzen/javascript-console),
+  (via the trailing `console` subcommand) through which you can interact using [`web3` methods](https://github.com/ChainSafe/web3.js/blob/0.20.7/DOCUMENTATION.md)
+  (note: the `web3` version bundled within `gzen` is very old, and not up to date with official docs),
+  as well as `gzen`'s own [management APIs](https://gzen.ethereum.org/docs/interacting-with-gzen/rpc).
+  This tool is optional and if you leave it out you can always attach it to an already running
+  `gzen` instance with `gzen attach`.
 
 ### A Full node on the Holesky test network
 
@@ -105,22 +104,22 @@ useful on the testnet too.
 
 Specifying the `--holesky` flag, however, will reconfigure your `gzen` instance a bit:
 
- * Instead of connecting to the main Zenanet network, the client will connect to the Holesky 
-   test network, which uses different P2P bootnodes, different network IDs and genesis
-   states.
- * Instead of using the default data directory (`~/.zenanet` on Linux for example), `gzen`
-   will nest itself one level deeper into a `holesky` subfolder (`~/.zenanet/holesky` on
-   Linux). Note, on OSX and Linux this also means that attaching to a running testnet node
-   requires the use of a custom endpoint since `gzen attach` will try to attach to a
-   production node endpoint by default, e.g.,
-   `gzen attach <datadir>/holesky/gzen.ipc`. Windows users are not affected by
-   this.
+- Instead of connecting to the main Zenanet network, the client will connect to the Holesky
+  test network, which uses different P2P bootnodes, different network IDs and genesis
+  states.
+- Instead of using the default data directory (`~/.zenanet` on Linux for example), `gzen`
+  will nest itself one level deeper into a `holesky` subfolder (`~/.zenanet/holesky` on
+  Linux). Note, on OSX and Linux this also means that attaching to a running testnet node
+  requires the use of a custom endpoint since `gzen attach` will try to attach to a
+  production node endpoint by default, e.g.,
+  `gzen attach <datadir>/holesky/gzen.ipc`. Windows users are not affected by
+  this.
 
-*Note: Although some internal protective measures prevent transactions from
+_Note: Although some internal protective measures prevent transactions from
 crossing over between the main network and test network, you should always
 use separate accounts for play and real money. Unless you manually move
 accounts, `gzen` will by default correctly separate the two networks and will not make any
-accounts available between them.*
+accounts available between them._
 
 ### Configuration
 
@@ -150,7 +149,7 @@ docker run -d --name zenanet-node -v /Users/alice/zenanet:/root \
 ```
 
 This will start `gzen` in snap-sync mode with a DB memory allowance of 1GB, as the
-above command does.  It will also create a persistent volume in your home directory for
+above command does. It will also create a persistent volume in your home directory for
 saving your blockchain as well as map the default ports. There is also an `alpine` tag
 available for a slim version of the image.
 
@@ -174,18 +173,18 @@ you'd expect.
 
 HTTP based JSON-RPC API options:
 
-  * `--http` Enable the HTTP-RPC server
-  * `--http.addr` HTTP-RPC server listening interface (default: `localhost`)
-  * `--http.port` HTTP-RPC server listening port (default: `8545`)
-  * `--http.api` API's offered over the HTTP-RPC interface (default: `eth,net,web3`)
-  * `--http.corsdomain` Comma separated list of domains from which to accept cross-origin requests (browser enforced)
-  * `--ws` Enable the WS-RPC server
-  * `--ws.addr` WS-RPC server listening interface (default: `localhost`)
-  * `--ws.port` WS-RPC server listening port (default: `8546`)
-  * `--ws.api` API's offered over the WS-RPC interface (default: `eth,net,web3`)
-  * `--ws.origins` Origins from which to accept WebSocket requests
-  * `--ipcdisable` Disable the IPC-RPC server
-  * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
+- `--http` Enable the HTTP-RPC server
+- `--http.addr` HTTP-RPC server listening interface (default: `localhost`)
+- `--http.port` HTTP-RPC server listening port (default: `8545`)
+- `--http.api` API's offered over the HTTP-RPC interface (default: `eth,net,web3`)
+- `--http.corsdomain` Comma separated list of domains from which to accept cross-origin requests (browser enforced)
+- `--ws` Enable the WS-RPC server
+- `--ws.addr` WS-RPC server listening interface (default: `localhost`)
+- `--ws.port` WS-RPC server listening port (default: `8546`)
+- `--ws.api` API's offered over the WS-RPC interface (default: `eth,net,web3`)
+- `--ws.origins` Origins from which to accept WebSocket requests
+- `--ipcdisable` Disable the IPC-RPC server
+- `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
 You'll need to use your own programming environments' capabilities (libraries, tools, etc) to
 connect via HTTP, WS or IPC to a `gzen` node configured with the above flags and you'll
@@ -208,9 +207,9 @@ to easily set up a network of gzen nodes without also setting up a corresponding
 
 There are three different solutions depending on your use case:
 
-  * If you are looking for a simple way to test smart contracts from go in your CI, you can use the [Simulated Backend](https://gzen.ethereum.org/docs/developers/dapp-developer/native-bindings#blockchain-simulator).
-  * If you want a convenient single node environment for testing, you can use our [Dev Mode](https://gzen.ethereum.org/docs/developers/dapp-developer/dev-mode).
-  * If you are looking for a multiple node test network, you can set one up quite easily with [Kurtosis](https://gzen.ethereum.org/docs/fundamentals/kurtosis).
+- If you are looking for a simple way to test smart contracts from go in your CI, you can use the [Simulated Backend](https://gzen.ethereum.org/docs/developers/dapp-developer/native-bindings#blockchain-simulator).
+- If you want a convenient single node environment for testing, you can use our [Dev Mode](https://gzen.ethereum.org/docs/developers/dapp-developer/dev-mode).
+- If you are looking for a multiple node test network, you can set one up quite easily with [Kurtosis](https://gzen.ethereum.org/docs/fundamentals/kurtosis).
 
 ## Contribution
 
@@ -226,13 +225,13 @@ and merge procedures quick and simple.
 
 Please make sure your contributions adhere to our coding guidelines:
 
- * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting)
-   guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
- * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary)
-   guidelines.
- * Pull requests need to be based on and opened against the `master` branch.
- * Commit messages should be prefixed with the package(s) they modify.
-   * E.g. "eth, rpc: make trace configs optional"
+- Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting)
+  guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
+- Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary)
+  guidelines.
+- Pull requests need to be based on and opened against the `master` branch.
+- Commit messages should be prefixed with the package(s) they modify.
+  - E.g. "eth, rpc: make trace configs optional"
 
 Please see the [Developers' Guide](https://gzen.ethereum.org/docs/developers/gzen-developer/dev-guide)
 for more details on configuring your environment, managing project dependencies, and
@@ -241,7 +240,7 @@ testing procedures.
 ### Contributing to gzen.ethereum.org
 
 For contributions to the [go-zenanet website](https://gzen.ethereum.org), please checkout and raise pull requests against the `website` branch.
-For more detailed instructions please see the `website` branch [README](https://github.com/zenanet-network/go-zenanet/tree/website#readme) or the 
+For more detailed instructions please see the `website` branch [README](https://github.com/zenanet-network/go-zenanet/tree/website#readme) or the
 [contributing](https://gzen.ethereum.org/docs/developers/gzen-developer/contributing) page of the website.
 
 ## License

@@ -227,12 +227,12 @@ func TestFetchShutdown(t *testing.T) {
 		err := json.NewEncoder(w).Encode(checkpoint.CheckpointResponse{
 			Height: "0",
 			Result: checkpoint.Checkpoint{
-				Proposer:   common.Address{},
-				StartBlock: big.NewInt(0),
-				EndBlock:   big.NewInt(512),
-				RootHash:   common.Hash{},
-				BorChainID: "15001",
-				Timestamp:  0,
+				Proposer:      common.Address{},
+				StartBlock:    big.NewInt(0),
+				EndBlock:      big.NewInt(512),
+				RootHash:      common.Hash{},
+				EireneChainID: "2024",
+				Timestamp:     0,
 			},
 		})
 

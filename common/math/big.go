@@ -20,13 +20,18 @@ package math
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/holiman/uint256"
 )
 
 // Various big integer limit values.
 var (
+	tt255     = BigPow(2, 255)
 	tt256     = BigPow(2, 256)
 	tt256m1   = new(big.Int).Sub(tt256, big.NewInt(1))
+	tt63      = BigPow(2, 63)
 	MaxBig256 = new(big.Int).Set(tt256m1)
+	MaxBig63  = new(big.Int).Sub(tt63, big.NewInt(1))
 )
 
 const (
@@ -154,6 +159,45 @@ func PaddedBigBytes(bigint *big.Int, n int) []byte {
 	return ret
 }
 
+// BigMax returns the larger of x or y.
+func BigMax(x, y *big.Int) *big.Int {
+	if x.Cmp(y) < 0 {
+		return y
+	}
+
+	return x
+}
+
+func BigMaxUint(x, y *uint256.Int) *uint256.Int {
+	if x.Lt(y) {
+		return y
+	}
+
+	return x
+}
+
+// BigMin returns the smaller of x or y.
+func BigMin(x, y *big.Int) *big.Int {
+	if x.Cmp(y) > 0 {
+		return y
+	}
+
+	return x
+}
+
+func BigMinUint256(x, y *uint256.Int) *uint256.Int {
+	if x.Gt(y) {
+		return y
+	}
+
+	return x
+}
+
+// todo: @anshalshukla - check implementation correctness
+func BigIntToUint256Int(x *big.Int) *uint256.Int {
+	return new(uint256.Int).SetBytes(x.Bytes())
+}
+
 // ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure
 // that buf has enough space. If buf is too short the result will be incomplete.
 func ReadBits(bigint *big.Int, buf []byte) {
@@ -165,6 +209,69 @@ func ReadBits(bigint *big.Int, buf []byte) {
 			d >>= 8
 		}
 	}
+}
+
+// FirstBitSet returns the index of the first 1 bit in v, counting from LSB.
+func FirstBitSet(v *big.Int) int {
+	for i := 0; i < v.BitLen(); i++ {
+		if v.Bit(i) > 0 {
+			return i
+		}
+	}
+
+	return v.BitLen()
+}
+
+// bigEndianByteAt returns the byte at position n,
+// in Big-Endian encoding
+// So n==0 returns the least significant byte
+func bigEndianByteAt(bigint *big.Int, n int) byte {
+	words := bigint.Bits()
+	// Check word-bucket the byte will reside in
+	i := n / wordBytes
+	if i >= len(words) {
+		return byte(0)
+	}
+
+	word := words[i]
+	// Offset of the byte
+	shift := 8 * uint(n%wordBytes)
+
+	return byte(word >> shift)
+}
+
+// Byte returns the byte at position n,
+// with the supplied padlength in Little-Endian encoding.
+// n==0 returns the MSB
+// Example: bigint '5', padlength 32, n=31 => 5
+func Byte(bigint *big.Int, padlength, n int) byte {
+	if n >= padlength {
+		return byte(0)
+	}
+
+	return bigEndianByteAt(bigint, padlength-1-n)
+}
+
+// Exp implements exponentiation by squaring.
+// Exp returns a newly-allocated big integer and does not change
+// base or exponent. The result is truncated to 256 bits.
+//
+// Courtesy @karalabe and @chfast
+func Exp(base, exponent *big.Int) *big.Int {
+	copyBase := new(big.Int).Set(base)
+	result := big.NewInt(1)
+
+	for _, word := range exponent.Bits() {
+		for i := 0; i < wordBits; i++ {
+			if word&1 == 1 {
+				U256(result.Mul(result, copyBase))
+			}
+			U256(copyBase.Mul(copyBase, copyBase))
+			word >>= 1
+		}
+	}
+
+	return result
 }
 
 // U256 encodes x as a 256 bit two's complement number. This operation is destructive.

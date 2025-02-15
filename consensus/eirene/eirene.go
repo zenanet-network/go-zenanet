@@ -920,7 +920,7 @@ func (c *Eirene) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	if IsSprintStart(headerNumber, c.config.CalculateSprint(headerNumber)) {
 		cx := statefull.ChainContext{Chain: chain, Eirene: c}
 
-		tracing.Exec(finalizeCtx, "", "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
+		tracing.Exec(finalizeCtx, "", "eirene.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
 			// check and commit span
 			err = c.checkAndCommitSpan(finalizeCtx, state, header, cx)
 		})
@@ -931,7 +931,7 @@ func (c *Eirene) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 		}
 
 		if c.HarmoniaClient != nil {
-			tracing.Exec(finalizeCtx, "", "bor.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
+			tracing.Exec(finalizeCtx, "", "eirene.checkAndCommitSpan", func(ctx context.Context, span trace.Span) {
 				// commit states
 				stateSyncData, err = c.CommitStates(finalizeCtx, state, header, cx)
 			})
@@ -943,7 +943,7 @@ func (c *Eirene) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 		}
 	}
 
-	tracing.Exec(finalizeCtx, "", "bor.changeContractCodeIfNeeded", func(ctx context.Context, span trace.Span) {
+	tracing.Exec(finalizeCtx, "", "eirene.changeContractCodeIfNeeded", func(ctx context.Context, span trace.Span) {
 		err = c.changeContractCodeIfNeeded(headerNumber, state)
 	})
 
@@ -953,7 +953,7 @@ func (c *Eirene) FinalizeAndAssemble(chain consensus.ChainHeaderReader, header *
 	}
 
 	// No block rewards in PoA, so the state remains as it is
-	tracing.Exec(finalizeCtx, "", "bor.IntermediateRoot", func(ctx context.Context, span trace.Span) {
+	tracing.Exec(finalizeCtx, "", "eirene.IntermediateRoot", func(ctx context.Context, span trace.Span) {
 		header.Root = state.IntermediateRoot(chain.Config().IsEIP158(header.Number))
 	})
 
@@ -991,7 +991,7 @@ func (c *Eirene) Authorize(currentSigner common.Address, signFn SignerFn) {
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
 func (c *Eirene) Seal(ctx context.Context, chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
-	_, sealSpan := tracing.StartSpan(ctx, "bor.Seal")
+	_, sealSpan := tracing.StartSpan(ctx, "eirene.Seal")
 
 	var endSpan bool = true
 

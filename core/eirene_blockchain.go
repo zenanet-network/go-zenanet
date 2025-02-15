@@ -25,7 +25,7 @@ func (bc *BlockChain) GetEireneReceiptByHash(hash common.Hash) *types.Receipt {
 	}
 
 	// add into bor receipt cache
-	bc.EireneReceiptsCache.Add(hash, receipt)
+	bc.eireneReceiptsCache.Add(hash, receipt)
 
 	return receipt
 }

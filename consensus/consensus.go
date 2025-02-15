@@ -18,12 +18,12 @@
 package consensus
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/state"
 	"github.com/zenanet-network/go-zenanet/core/types"
-	"github.com/zenanet-network/go-zenanet/core/vm"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/rpc"
 )
@@ -86,7 +86,7 @@ type Engine interface {
 	//
 	// Note: The state database might be updated to reflect any consensus rules
 	// that happen at finalization (e.g. block rewards).
-	Finalize(chain ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body)
+	Finalize(chain ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body)
 
 	// FinalizeAndAssemble runs any post-transaction state modifications (e.g. block
 	// rewards or process withdrawals) and assembles the final block.
@@ -100,7 +100,7 @@ type Engine interface {
 	//
 	// Note, the method returns immediately and will send the result async. More
 	// than one result may also be returned depending on the consensus algorithm.
-	Seal(chain ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
+	Seal(ctx context.Context, chain ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error
 
 	// SealHash returns the hash of a block prior to it being sealed.
 	SealHash(header *types.Header) common.Hash

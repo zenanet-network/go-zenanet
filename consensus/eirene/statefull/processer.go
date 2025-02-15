@@ -33,6 +33,11 @@ func (c ChainContext) GetHeader(hash common.Hash, number uint64) *types.Header {
 	return c.Chain.GetHeader(hash, number)
 }
 
+// eirene/contract/client.go chCtx attrbutte error issue
+func (c ChainContext) Config() *params.ChainConfig {
+	return c.Chain.Config()
+}
+
 // callmsg implements core.Message to allow passing it as a transaction simulator.
 type Callmsg struct {
 	zena.CallMsg

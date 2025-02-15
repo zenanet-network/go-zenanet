@@ -266,6 +266,25 @@ type PendingStateEventer interface {
 	SubscribePendingTransactions(ctx context.Context, ch chan<- *types.Transaction) (Subscription, error)
 }
 
+// interface for whitelist service
+type ChainValidator interface {
+	IsValidPeer(fetchHeadersByNumber func(number uint64, amount int, skip int, reverse bool) ([]*types.Header, []common.Hash, error)) (bool, error)
+	IsValidChain(currentHeader *types.Header, chain []*types.Header) (bool, error)
+	GetWhitelistedCheckpoint() (bool, uint64, common.Hash)
+	GetWhitelistedMilestone() (bool, uint64, common.Hash)
+	ProcessCheckpoint(endBlockNum uint64, endBlockHash common.Hash)
+	ProcessMilestone(endBlockNum uint64, endBlockHash common.Hash)
+	ProcessFutureMilestone(num uint64, hash common.Hash)
+	PurgeWhitelistedCheckpoint()
+	PurgeWhitelistedMilestone()
+
+	LockMutex(endBlockNum uint64) bool
+	UnlockMutex(doLock bool, milestoneId string, endBlockNum uint64, endBlockHash common.Hash)
+	UnlockSprint(endBlockNum uint64)
+	RemoveMilestoneID(milestoneId string)
+	GetMilestoneIDsList() []string
+}
+
 // BlockNumberReader provides access to the current block number.
 type BlockNumberReader interface {
 	BlockNumber(ctx context.Context) (uint64, error)

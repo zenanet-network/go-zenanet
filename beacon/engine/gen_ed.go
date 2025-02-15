@@ -50,12 +50,14 @@ func (e ExecutableData) MarshalJSON() ([]byte, error) {
 	enc.ExtraData = e.ExtraData
 	enc.BaseFeePerGas = (*hexutil.Big)(e.BaseFeePerGas)
 	enc.BlockHash = e.BlockHash
+
 	if e.Transactions != nil {
 		enc.Transactions = make([]hexutil.Bytes, len(e.Transactions))
 		for k, v := range e.Transactions {
 			enc.Transactions[k] = v
 		}
 	}
+	
 	enc.Withdrawals = e.Withdrawals
 	enc.BlobGasUsed = (*hexutil.Uint64)(e.BlobGasUsed)
 	enc.ExcessBlobGas = (*hexutil.Uint64)(e.ExcessBlobGas)

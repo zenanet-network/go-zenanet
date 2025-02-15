@@ -71,6 +71,15 @@ func BigToHash(b *big.Int) Hash { return BytesToHash(b.Bytes()) }
 // If b is larger than len(h), b will be cropped from the left.
 func HexToHash(s string) Hash { return BytesToHash(FromHex(s)) }
 
+// TODO
+// HexToHash sets byte representation of s to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func HexToRefHash(s string) *Hash {
+	v := BytesToHash(FromHex(s))
+
+	return &v
+}
+
 // Cmp compares two hashes.
 func (h Hash) Cmp(other Hash) int {
 	return bytes.Compare(h[:], other[:])
@@ -78,6 +87,9 @@ func (h Hash) Cmp(other Hash) int {
 
 // Bytes gets the byte representation of the underlying hash.
 func (h Hash) Bytes() []byte { return h[:] }
+
+// Hash converts an address to a hash by left-padding it with zeros.
+func (a Address) Hash() Hash { return BytesToHash(a[:]) }
 
 // Big converts a hash to a big integer.
 func (h Hash) Big() *big.Int { return new(big.Int).SetBytes(h[:]) }
