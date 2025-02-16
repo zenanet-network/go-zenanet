@@ -25,13 +25,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/math"
 	"github.com/zenanet-network/go-zenanet/core/state"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/params"
-	"github.com/holiman/uint256"
 )
 
 type TwoOperandTestcase struct {
@@ -104,7 +104,7 @@ func init() {
 
 func testTwoOperandOp(t *testing.T, tests []TwoOperandTestcase, opFn executionFunc, name string) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		pc    = uint64(0)
 	)
@@ -202,7 +202,7 @@ func TestSAR(t *testing.T) {
 
 func TestAddMod(t *testing.T) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		pc    = uint64(0)
 	)
@@ -245,7 +245,7 @@ func TestWriteExpectedValues(t *testing.T) {
 	// getResult is a convenience function to generate the expected values
 	getResult := func(args []*twoOperandParams, opFn executionFunc) []TwoOperandTestcase {
 		var (
-			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+			evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 			stack = newstack()
 			pc    = uint64(0)
 		)
@@ -289,7 +289,7 @@ func TestJsonTestcases(t *testing.T) {
 
 func opBenchmark(bench *testing.B, op executionFunc, args ...string) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		scope = &ScopeContext{nil, stack, nil}
 	)
@@ -527,7 +527,7 @@ func BenchmarkOpIsZero(b *testing.B) {
 
 func TestOpMstore(t *testing.T) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		mem   = NewMemory()
 	)
@@ -550,7 +550,7 @@ func TestOpMstore(t *testing.T) {
 
 func BenchmarkOpMstore(bench *testing.B) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		mem   = NewMemory()
 	)
@@ -569,8 +569,8 @@ func BenchmarkOpMstore(bench *testing.B) {
 
 func TestOpTstore(t *testing.T) {
 	var (
-		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
-		evm          = NewEVM(BlockContext{}, statedb, params.TestChainConfig, Config{})
+		statedb, _   = state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
+		evm          = NewEVM(BlockContext{}, TxContext{}, statedb, params.TestChainConfig, Config{})
 		stack        = newstack()
 		mem          = NewMemory()
 		caller       = common.Address{}
@@ -610,7 +610,7 @@ func TestOpTstore(t *testing.T) {
 
 func BenchmarkOpKeccak256(bench *testing.B) {
 	var (
-		evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+		evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 		stack = newstack()
 		mem   = NewMemory()
 	)
@@ -712,7 +712,7 @@ func TestRandom(t *testing.T) {
 		{name: "hash(0x010203)", random: crypto.Keccak256Hash([]byte{0x01, 0x02, 0x03})},
 	} {
 		var (
-			evm   = NewEVM(BlockContext{Random: &tt.random}, nil, params.TestChainConfig, Config{})
+			evm   = NewEVM(BlockContext{Random: &tt.random}, TxContext{}, nil, params.TestChainConfig, Config{})
 			stack = newstack()
 			pc    = uint64(0)
 		)
@@ -752,7 +752,7 @@ func TestBlobHash(t *testing.T) {
 		{name: "out-of-bounds (nil)", idx: 25, expect: zero, hashes: nil},
 	} {
 		var (
-			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+			evm   = NewEVM(BlockContext{}, TxContext{BlobHashes: tt.hashes}, nil, params.TestChainConfig, Config{})
 			stack = newstack()
 			pc    = uint64(0)
 		)
@@ -855,7 +855,7 @@ func TestOpMCopy(t *testing.T) {
 		},
 	} {
 		var (
-			evm   = NewEVM(BlockContext{}, nil, params.TestChainConfig, Config{})
+			evm   = NewEVM(BlockContext{}, TxContext{}, nil, params.TestChainConfig, Config{})
 			stack = newstack()
 			pc    = uint64(0)
 		)

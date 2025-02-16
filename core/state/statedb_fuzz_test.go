@@ -29,6 +29,7 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/rawdb"
 	"github.com/zenanet-network/go-zenanet/core/state/snapshot"
@@ -39,7 +40,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/trie"
 	"github.com/zenanet-network/go-zenanet/triedb"
 	"github.com/zenanet-network/go-zenanet/triedb/pathdb"
-	"github.com/holiman/uint256"
 )
 
 // A stateTest checks that the state changes are correctly captured. Instances
@@ -69,7 +69,7 @@ func newStateTestAction(addr common.Address, r *rand.Rand, index int) testAction
 		{
 			name: "SetNonce",
 			fn: func(a testAction, s *StateDB) {
-				s.SetNonce(addr, uint64(a.args[0]), tracing.NonceChangeUnspecified)
+				s.SetNonce(addr, uint64(a.args[0]))
 			},
 			args: make([]int64, 1),
 		},
@@ -209,7 +209,7 @@ func (test *stateTest) run() bool {
 		if i != 0 {
 			root = roots[len(roots)-1]
 		}
-		state, err := New(root, NewDatabase(tdb, snaps))
+		state, err := New(root, NewDatabase(tdb, snaps), nil)
 		if err != nil {
 			panic(err)
 		}

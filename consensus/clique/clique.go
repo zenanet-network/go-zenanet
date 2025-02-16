@@ -19,6 +19,7 @@ package clique
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -35,7 +36,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/consensus/misc/eip1559"
 	"github.com/zenanet-network/go-zenanet/core/state"
 	"github.com/zenanet-network/go-zenanet/core/types"
-	"github.com/zenanet-network/go-zenanet/core/vm"
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/ethdb"
 	"github.com/zenanet-network/go-zenanet/log"
@@ -574,7 +574,7 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 
 // Finalize implements consensus.Engine. There is no post-transaction
 // consensus rules in clique, do nothing here.
-func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state vm.StateDB, body *types.Body) {
+func (c *Clique) Finalize(chain consensus.ChainHeaderReader, header *types.Header, state *state.StateDB, body *types.Body) {
 	// No block rewards in PoA, so the state remains as is
 }
 
@@ -605,7 +605,7 @@ func (c *Clique) Authorize(signer common.Address) {
 
 // Seal implements consensus.Engine, attempting to create a sealed block using
 // the local signing credentials.
-func (c *Clique) Seal(chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
+func (c *Clique) Seal(ctx context.Context, chain consensus.ChainHeaderReader, block *types.Block, results chan<- *types.Block, stop <-chan struct{}) error {
 	panic("clique (poa) sealing not supported any more")
 }
 

@@ -24,6 +24,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
 	"github.com/zenanet-network/go-zenanet/common/math"
@@ -39,7 +40,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/trie"
 	"github.com/zenanet-network/go-zenanet/triedb"
 	"github.com/zenanet-network/go-zenanet/triedb/pathdb"
-	"github.com/holiman/uint256"
 )
 
 //go:generate go run github.com/fjl/gencodec -type Genesis -field-override genesisSpecMarshaling -out gen_genesis.go
@@ -145,7 +145,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 		emptyRoot = types.EmptyVerkleHash
 	}
 	db := rawdb.NewMemoryDatabase()
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil))
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb.NewDatabase(db, config), nil), nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -154,7 +154,7 @@ func hashAlloc(ga *types.GenesisAlloc, isVerkle bool) (common.Hash, error) {
 			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance), tracing.BalanceIncreaseGenesisBalance)
 		}
 		statedb.SetCode(addr, account.Code)
-		statedb.SetNonce(addr, account.Nonce, tracing.NonceChangeGenesis)
+		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}
@@ -169,7 +169,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 	if triedb.IsVerkle() {
 		emptyRoot = types.EmptyVerkleHash
 	}
-	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil))
+	statedb, err := state.New(emptyRoot, state.NewDatabase(triedb, nil), nil)
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -180,7 +180,7 @@ func flushAlloc(ga *types.GenesisAlloc, triedb *triedb.Database) (common.Hash, e
 			statedb.AddBalance(addr, uint256.MustFromBig(account.Balance), tracing.BalanceIncreaseGenesisBalance)
 		}
 		statedb.SetCode(addr, account.Code)
-		statedb.SetNonce(addr, account.Nonce, tracing.NonceChangeGenesis)
+		statedb.SetNonce(addr, account.Nonce)
 		for key, value := range account.Storage {
 			statedb.SetState(addr, key, value)
 		}

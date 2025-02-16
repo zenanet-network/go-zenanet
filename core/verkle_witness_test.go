@@ -24,20 +24,19 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ethereum/go-verkle"
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/consensus/beacon"
 	"github.com/zenanet-network/go-zenanet/consensus/ethash"
 	"github.com/zenanet-network/go-zenanet/core/rawdb"
 	"github.com/zenanet-network/go-zenanet/core/state"
-	"github.com/zenanet-network/go-zenanet/core/tracing"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/core/vm"
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/trie/utils"
 	"github.com/zenanet-network/go-zenanet/triedb"
-	"github.com/ethereum/go-verkle"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -121,7 +120,7 @@ func TestProcessVerkle(t *testing.T) {
 	// genesis := gspec.MustCommit(bcdb, triedb)
 	cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 	cacheConfig.SnapshotLimit = 0
-	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil)
+	blockchain, _ := NewBlockChain(bcdb, cacheConfig, gspec, nil, beacon.New(ethash.NewFaker()), vm.Config{}, nil, nil, nil)
 	defer blockchain.Stop()
 
 	txCost1 := params.TxGas
@@ -227,7 +226,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 	// block 2 parent hash is 0x0200....
 	// etc
 	checkBlockHashes := func(statedb *state.StateDB, isVerkle bool) {
-		statedb.SetNonce(params.HistoryStorageAddress, 1, tracing.NonceChangeUnspecified)
+		statedb.SetNonce(params.HistoryStorageAddress, 1)
 		statedb.SetCode(params.HistoryStorageAddress, params.HistoryStorageCode)
 		// Process n blocks, from 1 .. num
 		var num = 2
@@ -238,7 +237,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 				chainConfig = testVerkleChainConfig
 			}
 			vmContext := NewEVMBlockContext(header, nil, new(common.Address))
-			evm := vm.NewEVM(vmContext, statedb, chainConfig, vm.Config{})
+			evm := vm.NewEVM(vmContext, vm.TxContext{}, statedb, chainConfig, vm.Config{})
 			ProcessParentBlockHash(header.ParentHash, evm)
 		}
 		// Read block hashes for block 0 .. num-1
@@ -250,7 +249,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		}
 	}
 	t.Run("MPT", func(t *testing.T) {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 		checkBlockHashes(statedb, false)
 	})
 	t.Run("Verkle", func(t *testing.T) {
@@ -258,7 +257,7 @@ func TestProcessParentBlockHash(t *testing.T) {
 		cacheConfig := DefaultCacheConfigWithScheme(rawdb.PathScheme)
 		cacheConfig.SnapshotLimit = 0
 		triedb := triedb.NewDatabase(db, cacheConfig.triedbConfig(true))
-		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil))
+		statedb, _ := state.New(types.EmptyVerkleHash, state.NewDatabase(triedb, nil), nil)
 		checkBlockHashes(statedb, true)
 	})
 }

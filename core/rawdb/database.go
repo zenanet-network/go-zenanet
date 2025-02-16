@@ -25,11 +25,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/ethdb"
+	"github.com/zenanet-network/go-zenanet/ethdb/leveldb"
 	"github.com/zenanet-network/go-zenanet/ethdb/memorydb"
+	"github.com/zenanet-network/go-zenanet/ethdb/pebble"
 	"github.com/zenanet-network/go-zenanet/log"
-	"github.com/olekukonko/tablewriter"
 )
 
 // freezerdb is a database wrapper that enables ancient chain segment freezing.
@@ -290,6 +292,34 @@ func NewDatabaseWithFreezer(db ethdb.KeyValueStore, ancient string, namespace st
 		chainFreezer:  frdb,
 	}, nil
 }
+
+// NewLevelDBDatabase creates a persistent key-value database without a freezer
+// moving immutable chain segments into cold storage.
+func NewLevelDBDatabase(file string, cache int, handles int, namespace string, readonly bool) (ethdb.Database, error) {
+	db, err := leveldb.New(file, cache, handles, namespace, readonly)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Info("Using LevelDB as the backing database")
+
+	return NewDatabase(db), nil
+}
+
+// NewPebbleDBDatabase creates a persistent key-value database without a freezer
+// moving immutable chain segments into cold storage.
+func NewPebbleDBDatabase(file string, cache int, handles int, namespace string, readonly, ephemeral bool) (ethdb.Database, error) {
+	db, err := pebble.New(file, cache, handles, namespace, readonly, ephemeral)
+	if err != nil {
+		return nil, err
+	}
+	return NewDatabase(db), nil
+}
+
+const (
+	dbPebble  = "pebble"
+	dbLeveldb = "leveldb"
+)
 
 // NewMemoryDatabase creates an ephemeral in-memory key-value database without a
 // freezer moving immutable chain segments into cold storage.

@@ -99,20 +99,22 @@ const (
 	TxAuthTupleGas            uint64 = 12500 // Per auth tuple code specified in EIP-7702
 
 	// These have been changed during the course of the chain
-	CallGasFrontier              uint64 = 40  // Once per CALL operation & message call transaction.
-	CallGasEIP150                uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
-	BalanceGasFrontier           uint64 = 20  // The cost of a BALANCE operation
-	BalanceGasEIP150             uint64 = 400 // The cost of a BALANCE operation after Tangerine
-	BalanceGasEIP1884            uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
-	ExtcodeSizeGasFrontier       uint64 = 20  // Cost of EXTCODESIZE before EIP 150 (Tangerine)
-	ExtcodeSizeGasEIP150         uint64 = 700 // Cost of EXTCODESIZE after EIP 150 (Tangerine)
-	SloadGasFrontier             uint64 = 50
-	SloadGasEIP150               uint64 = 200
-	SloadGasEIP1884              uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
-	SloadGasEIP2200              uint64 = 800  // Cost of SLOAD after EIP 2200 (part of Istanbul)
-	ExtcodeHashGasConstantinople uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
-	ExtcodeHashGasEIP1884        uint64 = 700  // Cost of EXTCODEHASH after EIP 1884 (part in Istanbul)
-	SelfdestructGasEIP150        uint64 = 5000 // Cost of SELFDESTRUCT post EIP 150 (Tangerine)
+	CallGasFrontier                   uint64 = 40  // Once per CALL operation & message call transaction.
+	CallGasEIP150                     uint64 = 700 // Static portion of gas for CALL-derivates after EIP 150 (Tangerine)
+	BalanceGasFrontier                uint64 = 20  // The cost of a BALANCE operation
+	BalanceGasEIP150                  uint64 = 400 // The cost of a BALANCE operation after Tangerine
+	BalanceGasEIP1884                 uint64 = 700 // The cost of a BALANCE operation after EIP 1884 (part of Istanbul)
+	ExtcodeSizeGasFrontier            uint64 = 20  // Cost of EXTCODESIZE before EIP 150 (Tangerine)
+	ExtcodeSizeGasEIP150              uint64 = 700 // Cost of EXTCODESIZE after EIP 150 (Tangerine)
+	SloadGasFrontier                  uint64 = 50
+	SloadGasEIP150                    uint64 = 200
+	SloadGasEIP1884                   uint64 = 800  // Cost of SLOAD after EIP 1884 (part of Istanbul)
+	SloadGasEIP2200                   uint64 = 800  // Cost of SLOAD after EIP 2200 (part of Istanbul)
+	ExtcodeHashGasConstantinople      uint64 = 400  // Cost of EXTCODEHASH (introduced in Constantinople)
+	ExtcodeHashGasEIP1884             uint64 = 700  // Cost of EXTCODEHASH after EIP 1884 (part in Istanbul)
+	SelfdestructGasEIP150             uint64 = 5000 // Cost of SELFDESTRUCT post EIP 150 (Tangerine)
+	BaseFeeChangeDenominatorPreDelhi         = 8    // Bounds the amount the base fee can change between blocks before Delhi Hard Fork.
+	BaseFeeChangeDenominatorPostDelhi        = 16   // Bounds the amount the base fee can change between blocks after Delhi Hard Fork.
 
 	// EXP has a dynamic portion depending on the size of the exponent
 	ExpByteFrontier uint64 = 10 // was set to 10 in Frontier
@@ -175,6 +177,15 @@ const (
 	BlobTxPointEvaluationPrecompileGas = 50000   // Gas price for the point evaluation precompile.
 
 	HistoryServeWindow = 8192 // Number of blocks to serve historical block hashes for, EIP-2935.
+
+	// EireneDefaultMinerGasPrice defines the minimum gas price for bor validators to mine a transaction.
+	EireneDefaultMinerGasPrice = 25 * GWei
+
+	// EireneDefaultTxPoolPriceLimit defines the minimum gas price limit for bor to enforce txs acceptance into the pool.
+	EireneDefaultTxPoolPriceLimit = 25 * GWei
+
+	// EirenerDefaultGpoIgnorePrice defines the minimum gas price below which bor gpo will ignore transactions.
+	EireneDefaultGpoIgnorePrice = 25 * GWei
 )
 
 // Bls12381G1MultiExpDiscountTable is the gas discount table for BLS12-381 G1 multi exponentiation operation
@@ -190,6 +201,14 @@ var (
 	MinimumDifficulty      = big.NewInt(131072) // The minimum that the difficulty may ever be.
 	DurationLimit          = big.NewInt(13)     // The decision boundary on the blocktime duration used to determine whether difficulty should go up or not.
 )
+
+func BaseFeeChangeDenominator(borConfig *EireneConfig, number *big.Int) uint64 {
+	if borConfig.IsDelhi(number) {
+		return BaseFeeChangeDenominatorPostDelhi
+	} else {
+		return BaseFeeChangeDenominatorPreDelhi
+	}
+}
 
 // System contracts.
 var (

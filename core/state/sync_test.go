@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/rawdb"
+	"github.com/zenanet-network/go-zenanet/core/tracing"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/ethdb"
@@ -30,7 +32,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/triedb"
 	"github.com/zenanet-network/go-zenanet/triedb/hashdb"
 	"github.com/zenanet-network/go-zenanet/triedb/pathdb"
-	"github.com/holiman/uint256"
 )
 
 // testAccount is the data associated with an account used by the state tests.
@@ -53,7 +54,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 	db := rawdb.NewMemoryDatabase()
 	nodeDb := triedb.NewDatabase(db, config)
 	sdb := NewDatabase(nodeDb, nil)
-	state, _ := New(types.EmptyRootHash, sdb)
+	state, _ := New(types.EmptyRootHash, sdb, nil)
 
 	// Fill it with some arbitrary data
 	var accounts []*testAccount
@@ -61,7 +62,7 @@ func makeTestState(scheme string) (ethdb.Database, Database, *triedb.Database, c
 		obj := state.getOrNewStateObject(common.BytesToAddress([]byte{i}))
 		acc := &testAccount{address: common.BytesToAddress([]byte{i})}
 
-		obj.AddBalance(uint256.NewInt(uint64(11 * i)))
+		obj.AddBalance(uint256.NewInt(uint64(11*i)), tracing.BalanceChangeUnspecified)
 		acc.balance = uint256.NewInt(uint64(11 * i))
 
 		obj.SetNonce(uint64(42 * i))
@@ -93,7 +94,7 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, scheme string, root com
 		config.PathDB = pathdb.Defaults
 	}
 	// Check root availability and state contents
-	state, err := New(root, NewDatabase(triedb.NewDatabase(db, &config), nil))
+	state, err := New(root, NewDatabase(triedb.NewDatabase(db, &config), nil), nil)
 	if err != nil {
 		t.Fatalf("failed to create state trie at %x: %v", root, err)
 	}
@@ -119,7 +120,7 @@ func checkStateConsistency(db ethdb.Database, scheme string, root common.Hash) e
 	if scheme == rawdb.PathScheme {
 		config.PathDB = pathdb.Defaults
 	}
-	state, err := New(root, NewDatabase(triedb.NewDatabase(db, config), nil))
+	state, err := New(root, NewDatabase(triedb.NewDatabase(db, config), nil), nil)
 	if err != nil {
 		return err
 	}

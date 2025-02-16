@@ -86,13 +86,22 @@ type Backend interface {
 	ChainConfig() *params.ChainConfig
 	Engine() consensus.Engine
 
+	GetRootHash(ctx context.Context, starBlockNr uint64, endBlockNr uint64) (string, error)
+	GetVoteOnHash(ctx context.Context, startBlockNumber uint64, endBlockNumber uint64, hash string, milestoneID string) (bool, error)
+	GetEireneBlockReceipt(ctx context.Context, hash common.Hash) (*types.Receipt, error)
+	GetEireneBlockLogs(ctx context.Context, hash common.Hash) ([]*types.Log, error)
+	GetEireneBlockTransaction(ctx context.Context, txHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+	GetEireneBlockTransactionWithBlockHash(ctx context.Context, txHash common.Hash, blockHash common.Hash) (*types.Transaction, common.Hash, uint64, uint64, error)
+
 	// This is copied from filters.Backend
 	// eth/filters needs to be initialized from this backend type, so methods needed by
 	// it must also be included here.
 	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
 	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
+	GetWhitelistedCheckpoint() (bool, uint64, common.Hash)
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
+	GetWhitelistedMilestone() (bool, uint64, common.Hash)
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)
 }

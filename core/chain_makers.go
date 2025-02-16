@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-verkle"
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/consensus"
 	"github.com/zenanet-network/go-zenanet/consensus/misc"
@@ -32,8 +34,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/ethdb"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/triedb"
-	"github.com/ethereum/go-verkle"
-	"github.com/holiman/uint256"
 )
 
 // BlockGen creates blocks for testing.
@@ -99,7 +99,7 @@ func (b *BlockGen) Difficulty() *big.Int {
 func (b *BlockGen) SetParentBeaconRoot(root common.Hash) {
 	b.header.ParentBeaconRoot = &root
 	blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, b.statedb, b.cm.config, vm.Config{}))
+	ProcessBeaconBlockRoot(root, vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vm.Config{}))
 }
 
 // addTx adds a transaction to the generated block. If no coinbase has
@@ -115,7 +115,7 @@ func (b *BlockGen) addTx(bc *BlockChain, vmConfig vm.Config, tx *types.Transacti
 	}
 	var (
 		blockContext = NewEVMBlockContext(b.header, bc, &b.header.Coinbase)
-		evm          = vm.NewEVM(blockContext, b.statedb, b.cm.config, vmConfig)
+		evm          = vm.NewEVM(blockContext, vm.TxContext{}, b.statedb, b.cm.config, vmConfig)
 	)
 	b.statedb.SetTxContext(tx.Hash(), len(b.txs))
 	receipt, err := ApplyTransaction(evm, b.gasPool, b.statedb, b.header, tx, &b.header.GasUsed)
@@ -326,7 +326,7 @@ func (b *BlockGen) collectRequests(readonly bool) (requests [][]byte) {
 		}
 		// create EVM for system calls
 		blockContext := NewEVMBlockContext(b.header, b.cm, &b.header.Coinbase)
-		evm := vm.NewEVM(blockContext, statedb, b.cm.config, vm.Config{})
+		evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, b.cm.config, vm.Config{})
 		// EIP-7002
 		ProcessWithdrawalQueue(&requests, evm)
 		// EIP-7251
@@ -390,7 +390,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 			// EIP-2935
 			blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 			blockContext.Random = &common.Hash{} // enable post-merge instruction set
-			evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+			evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
 			ProcessParentBlockHash(b.header.ParentHash, evm)
 		}
 
@@ -427,7 +427,7 @@ func GenerateChain(config *params.ChainConfig, parent *types.Block, engine conse
 	defer triedb.Close()
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil))
+		statedb, err := state.New(parent.Root(), state.NewDatabase(triedb, nil), nil)
 		if err != nil {
 			panic(err)
 		}
@@ -497,7 +497,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 		// EIP-2935 / 7709
 		blockContext := NewEVMBlockContext(b.header, cm, &b.header.Coinbase)
 		blockContext.Random = &common.Hash{} // enable post-merge instruction set
-		evm := vm.NewEVM(blockContext, statedb, cm.config, vm.Config{})
+		evm := vm.NewEVM(blockContext, vm.TxContext{}, statedb, cm.config, vm.Config{})
 		ProcessParentBlockHash(b.header.ParentHash, evm)
 
 		// Execute any user modifications to the block.
@@ -530,7 +530,7 @@ func GenerateVerkleChain(config *params.ChainConfig, parent *types.Block, engine
 	}
 
 	for i := 0; i < n; i++ {
-		statedb, err := state.New(parent.Root(), state.NewDatabase(trdb, nil))
+		statedb, err := state.New(parent.Root(), state.NewDatabase(trdb, nil), nil)
 		if err != nil {
 			panic(err)
 		}

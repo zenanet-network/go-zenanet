@@ -24,12 +24,12 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
 	"github.com/zenanet-network/go-zenanet/core/state"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/params"
-	"github.com/holiman/uint256"
 )
 
 func TestMemoryGasCost(t *testing.T) {
@@ -85,7 +85,7 @@ func TestEIP2200(t *testing.T) {
 	for i, tt := range eip2200Tests {
 		address := common.BytesToAddress([]byte("contract"))
 
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 		statedb.CreateAccount(address)
 		statedb.SetCode(address, hexutil.MustDecode(tt.input))
 		statedb.SetState(address, common.Hash{}, common.BytesToHash([]byte{tt.original}))
@@ -95,9 +95,9 @@ func TestEIP2200(t *testing.T) {
 			CanTransfer: func(StateDB, common.Address, *uint256.Int) bool { return true },
 			Transfer:    func(StateDB, common.Address, common.Address, *uint256.Int) {},
 		}
-		evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
+		evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, Config{ExtraEips: []int{2200}})
 
-		_, gas, err := evm.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(uint256.Int))
+		_, gas, err := evm.Call(AccountRef(common.Address{}), address, nil, tt.gaspool, new(uint256.Int), nil)
 		if !errors.Is(err, tt.failure) {
 			t.Errorf("test %d: failure mismatch: have %v, want %v", i, err, tt.failure)
 		}
@@ -137,7 +137,7 @@ func TestCreateGas(t *testing.T) {
 		var gasUsed = uint64(0)
 		doCheck := func(testGas int) bool {
 			address := common.BytesToAddress([]byte("contract"))
-			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+			statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 			statedb.CreateAccount(address)
 			statedb.SetCode(address, hexutil.MustDecode(tt.code))
 			statedb.Finalise(true)
@@ -151,9 +151,9 @@ func TestCreateGas(t *testing.T) {
 				config.ExtraEips = []int{3860}
 			}
 
-			evm := NewEVM(vmctx, statedb, params.AllEthashProtocolChanges, config)
+			evm := NewEVM(vmctx, TxContext{}, statedb, params.AllEthashProtocolChanges, config)
 			var startGas = uint64(testGas)
-			ret, gas, err := evm.Call(AccountRef(common.Address{}), address, nil, startGas, new(uint256.Int))
+			ret, gas, err := evm.Call(AccountRef(common.Address{}), address, nil, startGas, new(uint256.Int), nil)
 			if err != nil {
 				return false
 			}

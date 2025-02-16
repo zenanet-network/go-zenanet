@@ -56,6 +56,10 @@ type Transaction struct {
 	inner TxData    // Consensus contents of a transaction
 	time  time.Time // Time first seen locally (spam avoidance)
 
+	// ERIENE specific - DO NOT REMOVE
+	// knownAccounts (PIP-15)
+	optionsPIP15 *OptionsPIP15
+
 	// caches
 	hash atomic.Pointer[common.Hash]
 	size atomic.Uint64
@@ -100,6 +104,16 @@ type TxData interface {
 
 	encode(*bytes.Buffer) error
 	decode([]byte) error
+}
+
+// PutOptions stores the optionsPIP15 field of the conditional transaction (PIP-15)
+func (tx *Transaction) PutOptions(options *OptionsPIP15) {
+	tx.optionsPIP15 = options
+}
+
+// GetOptions returns the optionsPIP15 field of the conditional transaction (PIP-15)
+func (tx *Transaction) GetOptions() *OptionsPIP15 {
+	return tx.optionsPIP15
 }
 
 // EncodeRLP implements rlp.Encoder

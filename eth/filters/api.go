@@ -30,6 +30,7 @@ import (
 	"github.com/zenanet-network/go-zenanet/common/hexutil"
 	"github.com/zenanet-network/go-zenanet/core/types"
 	"github.com/zenanet-network/go-zenanet/internal/ethapi"
+	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/rpc"
 )
 
@@ -68,6 +69,10 @@ type FilterAPI struct {
 	filtersMu sync.Mutex
 	filters   map[rpc.ID]*filter
 	timeout   time.Duration
+
+	eireneLogs bool
+
+	chainConfig *params.ChainConfig
 }
 
 // NewFilterAPI returns a new FilterAPI instance.

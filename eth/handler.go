@@ -37,6 +37,7 @@ import (
 	"github.com/zenanet-network/go-zenanet/eth/protocols/snap"
 	"github.com/zenanet-network/go-zenanet/ethdb"
 	"github.com/zenanet-network/go-zenanet/event"
+	"github.com/zenanet-network/go-zenanet/internal/ethapi"
 	"github.com/zenanet-network/go-zenanet/log"
 	"github.com/zenanet-network/go-zenanet/metrics"
 	"github.com/zenanet-network/go-zenanet/p2p"
@@ -110,6 +111,8 @@ type handler struct {
 	downloader *downloader.Downloader
 	txFetcher  *fetcher.TxFetcher
 	peers      *peerSet
+
+	ethAPI *ethapi.BlockChainAPI // EthAPI to interact
 
 	eventMux *event.TypeMux
 	txsCh    chan core.NewTxsEvent

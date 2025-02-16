@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/rawdb"
 	"github.com/zenanet-network/go-zenanet/core/tracing"
@@ -27,11 +28,10 @@ import (
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/internal/testrand"
 	"github.com/zenanet-network/go-zenanet/triedb"
-	"github.com/holiman/uint256"
 )
 
 func filledStateDB() *StateDB {
-	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting())
+	state, _ := New(types.EmptyRootHash, NewDatabaseForTesting(), nil)
 
 	// Create an account and check if the retrieved balance is correct
 	addr := common.HexToAddress("0xaffeaffeaffeaffeaffeaffeaffeaffeaffeaffe")
@@ -71,7 +71,7 @@ func TestVerklePrefetcher(t *testing.T) {
 	db := triedb.NewDatabase(disk, triedb.VerkleDefaults)
 	sdb := NewDatabase(db, nil)
 
-	state, err := New(types.EmptyRootHash, sdb)
+	state, err := New(types.EmptyRootHash, sdb, nil)
 	if err != nil {
 		t.Fatalf("failed to initialize state: %v", err)
 	}
@@ -85,7 +85,7 @@ func TestVerklePrefetcher(t *testing.T) {
 	state.SetState(addr, skey, sval)                                             // Change the storage trie
 	root, _ := state.Commit(0, true, false)
 
-	state, _ = New(root, sdb)
+	state, _ = New(root, sdb, nil)
 	sRoot := state.GetStorageRoot(addr)
 	fetcher := newTriePrefetcher(sdb, root, "", false)
 

@@ -154,3 +154,20 @@ type internalServerError struct {
 func (e *internalServerError) ErrorCode() int { return e.code }
 
 func (e *internalServerError) Error() string { return e.message }
+
+type CustomError struct {
+	Code            int
+	ValidationError string
+}
+
+type OptionsValidateError struct{ Message string }
+
+func (e *OptionsValidateError) ErrorCode() int { return -32003 }
+
+func (e *OptionsValidateError) Error() string { return e.Message }
+
+type KnownAccountsLimitExceededError struct{ Message string }
+
+func (e *KnownAccountsLimitExceededError) ErrorCode() int { return -32005 }
+
+func (e *KnownAccountsLimitExceededError) Error() string { return e.Message }

@@ -28,6 +28,8 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/holiman/billy"
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/consensus/misc/eip1559"
 	"github.com/zenanet-network/go-zenanet/consensus/misc/eip4844"
@@ -40,8 +42,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/crypto/kzg4844"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/rlp"
-	"github.com/holiman/billy"
-	"github.com/holiman/uint256"
 )
 
 var (
@@ -677,13 +677,13 @@ func TestOpenDrops(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 	statedb.AddBalance(crypto.PubkeyToAddress(gapper.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(dangler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(filler.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3, tracing.NonceChangeUnspecified)
+	statedb.SetNonce(crypto.PubkeyToAddress(filler.PublicKey), 3)
 	statedb.AddBalance(crypto.PubkeyToAddress(overlapper.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
-	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2, tracing.NonceChangeUnspecified)
+	statedb.SetNonce(crypto.PubkeyToAddress(overlapper.PublicKey), 2)
 	statedb.AddBalance(crypto.PubkeyToAddress(underpayer.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(outpricer.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(crypto.PubkeyToAddress(exceeder.PublicKey), uint256.NewInt(1000000), tracing.BalanceChangeUnspecified)
@@ -808,7 +808,7 @@ func TestOpenIndex(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 	statedb.AddBalance(addr, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.Commit(0, true, false)
 
@@ -908,7 +908,7 @@ func TestOpenHeap(t *testing.T) {
 	store.Close()
 
 	// Create a blob pool out of the pre-seeded data
-	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+	statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 	statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 	statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
@@ -988,7 +988,7 @@ func TestOpenCap(t *testing.T) {
 	// with a high cap to ensure everything was persisted previously
 	for _, datacap := range []uint64{2 * (txAvgSize + blobSize), 100 * (txAvgSize + blobSize)} {
 		// Create a blob pool out of the pre-seeded data, but cap it to 2 blob transaction
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
@@ -1075,7 +1075,7 @@ func TestChangingSlotterSize(t *testing.T) {
 
 	// Mimic a blobpool with max blob count of 6 upgrading to a max blob count of 24.
 	for _, maxBlobs := range []int{6, 24} {
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 		statedb.AddBalance(addr1, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr2, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
 		statedb.AddBalance(addr3, uint256.NewInt(1_000_000_000), tracing.BalanceChangeUnspecified)
@@ -1519,7 +1519,7 @@ func TestAdd(t *testing.T) {
 			keys  = make(map[string]*ecdsa.PrivateKey)
 			addrs = make(map[string]common.Address)
 		)
-		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ := state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 		for acc, seed := range tt.seeds {
 			// Generate a new random key/address for the seed account
 			keys[acc], _ = crypto.GenerateKey()
@@ -1527,7 +1527,7 @@ func TestAdd(t *testing.T) {
 
 			// Seed the state database with this account
 			statedb.AddBalance(addrs[acc], new(uint256.Int).SetUint64(seed.balance), tracing.BalanceChangeUnspecified)
-			statedb.SetNonce(addrs[acc], seed.nonce, tracing.NonceChangeUnspecified)
+			statedb.SetNonce(addrs[acc], seed.nonce)
 
 			// Sign the seed transactions and store them in the data store
 			for _, tx := range seed.txs {
@@ -1583,7 +1583,7 @@ func TestAdd(t *testing.T) {
 			// Apply the nonce updates to the state db
 			for _, tx := range txs {
 				sender, _ := types.Sender(types.LatestSigner(params.MainnetChainConfig), tx)
-				chain.statedb.SetNonce(sender, tx.Nonce()+1, tracing.NonceChangeUnspecified)
+				chain.statedb.SetNonce(sender, tx.Nonce()+1)
 			}
 			pool.Reset(chain.CurrentBlock(), header)
 			verifyPoolInternals(t, pool)
@@ -1626,7 +1626,7 @@ func benchmarkPoolPending(b *testing.B, datacap uint64) {
 		basefee    = uint64(1050)
 		blobfee    = uint64(105)
 		signer     = types.LatestSigner(params.MainnetChainConfig)
-		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting())
+		statedb, _ = state.New(types.EmptyRootHash, state.NewDatabaseForTesting(), nil)
 		chain      = &testBlockChain{
 			config:  params.MainnetChainConfig,
 			basefee: uint256.NewInt(basefee),

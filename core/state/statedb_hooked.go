@@ -19,6 +19,7 @@ package state
 import (
 	"math/big"
 
+	"github.com/holiman/uint256"
 	"github.com/zenanet-network/go-zenanet/common"
 	"github.com/zenanet-network/go-zenanet/core/stateless"
 	"github.com/zenanet-network/go-zenanet/core/tracing"
@@ -26,7 +27,6 @@ import (
 	"github.com/zenanet-network/go-zenanet/crypto"
 	"github.com/zenanet-network/go-zenanet/params"
 	"github.com/zenanet-network/go-zenanet/trie/utils"
-	"github.com/holiman/uint256"
 )
 
 // hookedStateDB represents a statedb which emits calls to tracing-hooks
@@ -181,7 +181,7 @@ func (s *hookedStateDB) AddBalance(addr common.Address, amount *uint256.Int, rea
 
 func (s *hookedStateDB) SetNonce(address common.Address, nonce uint64, reason tracing.NonceChangeReason) {
 	prev := s.inner.GetNonce(address)
-	s.inner.SetNonce(address, nonce, reason)
+	s.inner.SetNonce(address, nonce)
 	if s.hooks.OnNonceChangeV2 != nil {
 		s.hooks.OnNonceChangeV2(address, prev, nonce, reason)
 	} else if s.hooks.OnNonceChange != nil {

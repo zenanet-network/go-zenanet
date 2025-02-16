@@ -249,8 +249,8 @@ func TestFilters(t *testing.T) {
 			gen.AddTx(tx)
 		}
 	})
-	var l uint64
-	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, &l)
+
+	bc, err := core.NewBlockChain(db, nil, gspec, nil, ethash.NewFaker(), vm.Config{}, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

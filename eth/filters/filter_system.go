@@ -61,6 +61,8 @@ type Backend interface {
 	GetBody(ctx context.Context, hash common.Hash, number rpc.BlockNumber) (*types.Body, error)
 	GetReceipts(ctx context.Context, blockHash common.Hash) (types.Receipts, error)
 	GetLogs(ctx context.Context, blockHash common.Hash, number uint64) ([][]*types.Log, error)
+	GetEireneBlockReceipt(ctx context.Context, blockHash common.Hash) (*types.Receipt, error)
+	GetEireneBlockLogs(ctx context.Context, blockHash common.Hash) ([]*types.Log, error)
 
 	CurrentHeader() *types.Header
 	ChainConfig() *params.ChainConfig
@@ -68,6 +70,8 @@ type Backend interface {
 	SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription
 	SubscribeRemovedLogsEvent(ch chan<- core.RemovedLogsEvent) event.Subscription
 	SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscription
+	SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription
+	SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription
 
 	BloomStatus() (uint64, uint64)
 	ServiceFilter(ctx context.Context, session *bloombits.MatcherSession)

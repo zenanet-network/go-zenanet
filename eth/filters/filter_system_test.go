@@ -45,9 +45,12 @@ type testBackend struct {
 	txFeed          event.Feed
 	logsFeed        event.Feed
 	rmLogsFeed      event.Feed
+	pendingLogsFeed event.Feed
 	chainFeed       event.Feed
 	pendingBlock    *types.Block
 	pendingReceipts types.Receipts
+
+	stateSyncFeed event.Feed
 }
 
 func (b *testBackend) ChainConfig() *params.ChainConfig {
@@ -116,6 +119,10 @@ func (b *testBackend) GetReceipts(ctx context.Context, hash common.Hash) (types.
 	return nil, nil
 }
 
+func (b *testBackend) SubscribeStateSyncEvent(ch chan<- core.StateSyncEvent) event.Subscription {
+	return b.stateSyncFeed.Subscribe(ch)
+}
+
 func (b *testBackend) GetLogs(ctx context.Context, hash common.Hash, number uint64) ([][]*types.Log, error) {
 	logs := rawdb.ReadLogs(b.db, hash, number)
 	return logs, nil
@@ -133,12 +140,41 @@ func (b *testBackend) SubscribeLogsEvent(ch chan<- []*types.Log) event.Subscript
 	return b.logsFeed.Subscribe(ch)
 }
 
+func (b *testBackend) SubscribePendingLogsEvent(ch chan<- []*types.Log) event.Subscription {
+	return b.pendingLogsFeed.Subscribe(ch)
+}
+
 func (b *testBackend) SubscribeChainEvent(ch chan<- core.ChainEvent) event.Subscription {
 	return b.chainFeed.Subscribe(ch)
 }
 
 func (b *testBackend) BloomStatus() (uint64, uint64) {
 	return params.BloomBitsBlocks, b.sections
+}
+func (b *testBackend) GetEireneBlockReceipt(ctx context.Context, blockHash common.Hash) (*types.Receipt, error) {
+	number := rawdb.ReadHeaderNumber(b.db, blockHash)
+	if number == nil {
+		return &types.Receipt{}, nil
+	}
+	receipt := rawdb.ReadEireneReceipt(b.db, blockHash, *number, nil)
+	if receipt == nil {
+		return &types.Receipt{}, nil
+	}
+
+	return receipt, nil
+}
+
+func (b *testBackend) GetEireneBlockLogs(ctx context.Context, blockHash common.Hash) ([]*types.Log, error) {
+	receipt, err := b.GetEireneBlockReceipt(ctx, blockHash)
+	if err != nil {
+		return []*types.Log{}, err
+	}
+
+	if receipt == nil {
+		return []*types.Log{}, nil
+	}
+
+	return receipt.Logs, nil
 }
 
 func (b *testBackend) ServiceFilter(ctx context.Context, session *bloombits.MatcherSession) {

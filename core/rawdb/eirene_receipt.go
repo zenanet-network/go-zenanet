@@ -20,10 +20,10 @@ var (
 )
 
 const (
-	eireneTxLookupPrefixStr = "matic-eirene-tx-lookup-"
+	eireneTxLookupPrefixStr = "zena-eirene-tx-lookup-"
 
 	// freezerBorReceiptTable indicates the name of the freezer bor receipts table.
-	freezerEireneReceiptTable = "matic-eirene-receipts"
+	freezerEireneReceiptTable = "zena-eirene-receipts"
 )
 
 // eireneTxLookupKey = borTxLookupPrefix + bor tx hash
@@ -68,7 +68,7 @@ func ReadRawEireneReceipt(db ethdb.Reader, hash common.Hash, number uint64) *typ
 	// Convert the receipts from their storage form to their internal representation
 	var storageReceipt types.ReceiptForStorage
 	if err := rlp.DecodeBytes(data, &storageReceipt); err != nil {
-		log.Error("Invalid bor receipt RLP", "hash", hash, "err", err)
+		log.Error("Invalid eirene receipt RLP", "hash", hash, "err", err)
 		return nil
 	}
 
@@ -110,7 +110,7 @@ func ReadEireneReceipt(db ethdb.Reader, hash common.Hash, number uint64, config 
 }
 
 // WriteBorReceipt stores all the bor receipt belonging to a block.
-func WriteEireneReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64, borReceipt *types.ReceiptForStorage) {
+func WriteEireneReceipt(db ethdb.KeyValueWriter, hash common.Hash, number uint64, eireneReceipt *types.ReceiptForStorage) {
 	// Convert the bor receipt into their storage form and serialize them
 	bytes, err := rlp.EncodeToBytes(eireneReceipt)
 	if err != nil {
@@ -190,23 +190,23 @@ func ReadEireneTxLookupEntry(db ethdb.Reader, txHash common.Hash) *uint64 {
 	return &number
 }
 
-// WriteBorTxLookupEntry stores a positional metadata for bor transaction using block hash and block number
+// WriteEireneTxLookupEntry stores a positional metadata for eirene transaction using block hash and block number
 func WriteEireneTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	txHash := types.GetDerivedEireneTxHash(eireneReceiptKey(number, hash))
 	if err := db.Put(eireneTxLookupKey(txHash), big.NewInt(0).SetUint64(number).Bytes()); err != nil {
-		log.Crit("Failed to store bor transaction lookup entry", "err", err)
+		log.Crit("Failed to store eirene transaction lookup entry", "err", err)
 	}
 }
 
-// DeleteBorTxLookupEntry removes bor transaction data associated with block hash and block number
+// DeleteEireneTxLookupEntry removes eirene transaction data associated with block hash and block number
 func DeleteEireneTxLookupEntry(db ethdb.KeyValueWriter, hash common.Hash, number uint64) {
 	txHash := types.GetDerivedEireneTxHash(eireneReceiptKey(number, hash))
 	DeleteEireneTxLookupEntryByTxHash(db, txHash)
 }
 
-// DeleteBorTxLookupEntryByTxHash removes bor transaction data associated with a bor tx hash.
+// DeleteEireneTxLookupEntryByTxHash removes bor transaction data associated with a eirene tx hash.
 func DeleteEireneTxLookupEntryByTxHash(db ethdb.KeyValueWriter, txHash common.Hash) {
 	if err := db.Delete(eireneTxLookupKey(txHash)); err != nil {
-		log.Crit("Failed to delete bor transaction lookup entry", "err", err)
+		log.Crit("Failed to delete eirene transaction lookup entry", "err", err)
 	}
 }
