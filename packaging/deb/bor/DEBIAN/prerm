@@ -1,0 +1,9 @@
+#!/bin/bash
+#
+#
+##############
+# Stop eirene before removal
+##############
+#sudo systemctl stop eirene.service
+#############
+

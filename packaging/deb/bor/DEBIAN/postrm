@@ -1,0 +1,6 @@
+#!/bin/bash
+#
+###############
+# Remove eirene installs
+##############
+sudo rm -rf /usr/bin/eirene

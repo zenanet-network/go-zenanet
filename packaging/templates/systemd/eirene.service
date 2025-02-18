@@ -1,0 +1,16 @@
+[Unit]
+  Description=eirene
+  StartLimitIntervalSec=500
+  StartLimitBurst=5
+
+[Service]
+  Restart=on-failure
+  RestartSec=5s
+  ExecStart=/usr/bin/eirene server -config "/var/lib/eirene/config.toml"
+  Type=simple
+  KillSignal=SIGINT
+  User=eirene
+  TimeoutStopSec=120
+
+[Install]
+  WantedBy=multi-user.target

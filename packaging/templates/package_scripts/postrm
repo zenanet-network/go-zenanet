@@ -1,0 +1,6 @@
+#!/bin/bash
+#
+###############
+# Remove eirene installs
+##############
+sudo systemctl daemon-reload
