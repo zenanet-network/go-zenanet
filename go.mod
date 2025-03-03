@@ -291,9 +291,9 @@ require (
 	google.golang.org/genproto v0.0.0-20240213162025-012b6fc9bca9 // indirect
 )
 
-replace github.com/cosmos/cosmos-sdk => github.com/zenanet-network/cosmos-sdk v0.38.4
+replace github.com/cosmos/cosmos-sdk => github.com/zenanet-network/cosmos-sdk v0.1.0
 
-replace github.com/tendermint/tendermint => github.com/zenanet-network/tendermint v0.33.0
+replace github.com/tendermint/tendermint => github.com/zenanet-network/tendermint v0.1.0-beta
 
 replace github.com/tendermint/tm-db => github.com/tendermint/tm-db v0.2.0
 
